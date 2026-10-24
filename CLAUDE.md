@@ -12,7 +12,7 @@ Eigenständiges Projekt (nicht Teil von Flex-Studio). **Keine Passwörter, Token
 
 ## Architektur
 - Ein Image `ghcr.io/flexisticker/mlz-protokoll` (Node 22, Express 5, `node:sqlite`, Vue 3 + Vite + vite-plugin-pwa),
-  Port 8090 (Unraid-Host 8095 – 8094 hat die Video-Zentrale), Volume `/data`, optional `/models` = Whisper-Modelle der **Video-Zentrale** (`/mnt/user/appdata/video-zentrale/whisper`, nur lesend).
+  Port 8090 (Unraid-Host 8180 – 8094 hat die Video-Zentrale, 8095 ist ebenfalls belegt), Volume `/data`, optional `/models` = Whisper-Modelle der **Video-Zentrale** (`/mnt/user/appdata/video-zentrale/whisper`, nur lesend).
   Seit 1.1.0 kein speaches-Container mehr. Unraid-Vorlage `unraid/mlz-protokoll.xml`, Anleitung `docs/INSTALLATION-UNRAID.md`. Action `.github/workflows/docker.yml` (Tests + Build auf `main`).
 - `shared/` wird von Server **und** Browser genutzt: `holidays.js` (alle Bundesländer, Ostern), `timeparse.js`
   (gesprochene Zeiten inkl. schwäbisch „viertel acht“ = 7:15), `worktime.js` (Soll/Ist, Pausen § 4 ArbZG, Urlaubskonto,
