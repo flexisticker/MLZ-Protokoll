@@ -5,12 +5,18 @@ import { idbAll, idbDel, idbGet, idbPut } from './idb.js';
 import { sha256Blob } from './hash.js';
 import { debounce, localNow, uuid } from './util.js';
 import { withDefaults } from '../../shared/worktime.js';
+import { aiSummary, mergeAssist } from '../../shared/assist.js';
+
+export async function loadAssist() {
+  try { store.assist = await api('/assist/status'); } catch { /* offline: letzter Stand bleibt */ }
+}
 
 export const store = reactive({
   ready: false,
   session: null, // { setup, user, version }
   data: null, // Serverstand (Lesesicht der Beweiskette)
   drafts: [],
+  assist: { engine: 'off' }, // KI-Ausfüllhilfe (Stand vom Server)
   outbox: [], // { id, type, label, error, tries, createdAt }
   online: navigator.onLine,
   syncing: false,
@@ -41,11 +47,11 @@ async function loadOutbox() {
 let outSeq = Date.now();
 
 /** Datei aufnehmen: Prüfsumme sofort bilden, in die Warteschlange, dann senden. */
-export async function queueFile(blob, { purpose, name = '', draftId = '', capturedAt = new Date().toISOString(), durationSec = null }) {
+export async function queueFile(blob, { purpose, name = '', draftId = '', capturedAt = new Date().toISOString(), durationSec = null, assist = false }) {
   const id = uuid();
   const sha256 = await sha256Blob(blob);
   const mime = (blob.type || 'application/octet-stream').split(';')[0];
-  const item = { id, seq: outSeq++, type: 'file', purpose, mime, name, draftId, capturedAt, durationSec, sha256, size: blob.size, blob, createdAt: new Date().toISOString(), label: purpose === 'photo' ? 'Foto' : purpose.includes('audio') ? 'Sprachaufnahme' : 'Datei', tries: 0 };
+  const item = { id, seq: outSeq++, type: 'file', purpose, mime, name, draftId, capturedAt, durationSec, sha256, assist, size: blob.size, blob, createdAt: new Date().toISOString(), label: purpose === 'photo' ? 'Foto' : purpose.includes('audio') ? 'Sprachaufnahme' : 'Datei', tries: 0 };
   await idbPut('outbox', item);
   await loadOutbox();
   sync();
@@ -89,7 +95,7 @@ async function doSync() {
         if (it.type === 'file') {
           await api('/files', {
             method: 'POST', body: it.blob,
-            headers: { 'Content-Type': it.mime, 'x-file-id': it.id, 'x-purpose': it.purpose, 'x-sha256': it.sha256, 'x-captured-at': it.capturedAt, 'x-name': encodeURIComponent(it.name || ''), 'x-draft': it.draftId || '', 'x-duration': String(it.durationSec || '') },
+            headers: { 'Content-Type': it.mime, 'x-file-id': it.id, 'x-purpose': it.purpose, 'x-sha256': it.sha256, 'x-captured-at': it.capturedAt, 'x-name': encodeURIComponent(it.name || ''), 'x-draft': it.draftId || '', 'x-duration': String(it.durationSec || ''), ...(it.assist ? { 'x-assist': '1' } : {}) },
           });
         } else {
           await api('/evidence', { method: 'POST', body: { id: it.id, kind: it.kind, ref: it.ref, capturedAt: it.capturedAt, payload: it.payload } });
@@ -109,6 +115,7 @@ async function doSync() {
     await loadOutbox();
     await refresh();
     await pushDrafts();
+    await loadDrafts().catch(() => {});
     store.lastSync = new Date().toISOString();
   } catch (e) {
     if (e instanceof ApiError && e.status === 0) store.online = false;
@@ -143,15 +150,22 @@ async function offlineStart() {
 // ------------------------------------------------------------ Entwürfe (lokal + Server)
 export function newDraft(section = 'incident', extra = {}) {
   const now = localNow();
-  return { id: uuid(), entryId: uuid(), section, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), eventAt: now, eventEnd: '', title: '', category: '', location: '', persons: '', witnesses: '', facts: '', quotes: '', consequences: '', reaction: '', assessment: '', delayReason: '', caseId: '', fileIds: [], files: {}, applied: [], ...extra };
+  return { id: uuid(), entryId: uuid(), section, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), eventAt: now, eventAtAuto: true, eventEnd: '', title: '', category: '', location: '', persons: '', witnesses: '', facts: '', quotes: '', consequences: '', reaction: '', assessment: '', delayReason: '', caseId: '', fileIds: [], files: {}, applied: [], ...extra };
 }
 
-async function loadDrafts() {
+export async function loadDrafts() {
   const local = await idbAll('drafts');
   let remote = [];
   try { remote = await api('/drafts'); } catch { /* offline */ }
   const map = new Map(local.map((d) => [d.id, d]));
-  for (const r of remote) { const l = map.get(r.id); if (!l || (r.updatedAt || '') > (l.updatedAt || '')) { map.set(r.id, r); await idbPut('drafts', r); } }
+  for (const r of remote) {
+    const l = map.get(r.id);
+    let next = null;
+    if (!l) next = r;
+    else if ((r.assist?.updatedAt || '') > (l.assist?.updatedAt || '')) next = mergeAssist(l, r); // neues KI-Ergebnis, eigene Änderungen bleiben
+    else if ((r.updatedAt || '') > (l.updatedAt || '')) next = r; // an einem anderen Gerät bearbeitet
+    if (next) { map.set(r.id, next); await idbPut('drafts', JSON.parse(JSON.stringify(next))); }
+  }
   // festgeschriebene Entwürfe entfernen
   for (const d of map.values()) if (store.data?.entries?.[d.entryId]) { map.delete(d.id); await idbDel('drafts', d.id); }
   store.drafts = [...map.values()].sort((a, b) => (b.updatedAt || '').localeCompare(a.updatedAt || ''));
@@ -189,6 +203,7 @@ export async function finalizeDraft(d) {
   payload.id = d.entryId;
   payload.draftId = d.id;
   payload.draftCreatedAt = d.createdAt;
+  if (d.assist?.evidenceId) payload.ai = { evidenceId: d.assist.evidenceId, engine: d.assist.engine, model: d.assist.model, ...aiSummary(d) };
   await idbDel('drafts', d.id);
   store.drafts = store.drafts.filter((x) => x.id !== d.id);
   dirty.delete(d.id);
@@ -210,6 +225,7 @@ export async function init() {
   if (store.session.user && !store.session.user.mustChange) {
     await refresh().catch(() => { store.online = false; });
     await loadDrafts().catch(() => {});
+    loadAssist();
     sync();
   } else {
     store.drafts = await idbAll('drafts').catch(() => []);
@@ -223,6 +239,7 @@ export async function afterLogin(user) {
   if (!user.mustChange) {
     await refresh();
     await loadDrafts();
+    loadAssist();
     sync();
   }
 }

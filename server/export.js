@@ -32,6 +32,7 @@ const pdfText = (s) => String(s ?? '').replace(/[−‐‑]/g, '-').replace(/[�
   .replace(/[^\n\t\x20-\x7e\xa0-\xff]/g, (c) => (CP1252_EXTRA.includes(c) ? c : '?'));
 
 export const SECTION_LABEL = { incident: 'Auffälligkeit / Vorfall', br: 'Betriebsrat' };
+const AI_LABEL = { title: 'Titel', category: 'Art', eventAt: 'Zeitpunkt', eventEnd: 'Ende', location: 'Ort', persons: 'Beteiligte', witnesses: 'Zeugen', facts: 'Sachverhalt', quotes: 'Zitate', consequences: 'Folgen', reaction: 'Reaktion', assessment: 'Bewertung' };
 
 /** Auswahl bestimmen. */
 function select({ from, to, parts, caseId }) {
@@ -47,6 +48,7 @@ function select({ from, to, parts, caseId }) {
     for (const fid of e.fileIds || []) { chosen.add(fid); if (st.transcripts[fid]) chosen.add(st.transcripts[fid].evidenceId); }
     for (const a of e.addenda) { chosen.add(a.evidenceId); for (const fid of a.fileIds || []) { chosen.add(fid); if (st.transcripts[fid]) chosen.add(st.transcripts[fid].evidenceId); } }
     if (e.retracted) chosen.add(e.retracted.evidenceId);
+    if (e.ai?.evidenceId) chosen.add(e.ai.evidenceId);
   }
   const times = [];
   if (parts.includes('time') && !caseId) {
@@ -144,6 +146,10 @@ function buildPdf(sel, opts, info) {
       field('Eigene Reaktion / Meldung', e.reaction);
       field('Bewertung des Verfassers (keine Tatsachenangabe)', e.assessment);
       field('Grund für spätere Erfassung', e.delayReason);
+      if (e.ai) {
+        const names = (list) => (list || []).map((f) => AI_LABEL[f] || f).join(', ');
+        small(`Erstellt mit KI-Ausfüllhilfe (${e.ai.engine}${e.ai.model ? `, ${e.ai.model}` : ''}): Die Felder wurden aus der eigenen Sprachaufnahme vorgeschlagen und vom Verfasser geprüft und festgeschrieben.${e.ai.kept?.length ? ` Unverändert übernommen: ${names(e.ai.kept)}.` : ''}${e.ai.edited?.length ? ` Vom Verfasser geändert: ${names(e.ai.edited)}.` : ''} Der Vorschlag der KI ist als eigener Eintrag in der Beweiskette enthalten.`);
+      }
       for (const fid of e.fileIds || []) fileBlock(doc, st, fid, W, field, small, ensure, t);
       small(`Ereignis: ${deLocal(e.eventAt)} · Erfasst am Handy: ${deTime(e.capturedAt)} · Eingang Server: ${deTime(e.receivedAt)} · Prüfwert: ${e.hash}`);
       small(`Zeitstempel: ${anchorText(e.seq)}`);

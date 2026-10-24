@@ -38,6 +38,27 @@ Version 1.0.0 brauchte noch den Container `speaches` und das Netz `mlz-net`. Ab 
 Docker → `speaches` → Remove (inkl. Image), dann im Terminal `docker network rm mlz-net` und bei `mlz-protokoll`
 Network Type auf `bridge` stellen. `/mnt/user/appdata/speaches` kann gelöscht werden.
 
+## 4a. KI-Ausfüllhilfe (Ollama) – „einfach erzählen, die App füllt aus“
+
+Die KI läuft lokal in einem eigenen Container **Ollama** – nichts verlässt den Server.
+
+1. Unraid → **Apps** → nach **„ollama“** suchen → die offizielle App (Repository `ollama/ollama`) installieren.
+   - Port: `11434`
+   - Pfad: `/mnt/user/appdata/ollama` → `/root/.ollama`
+   - Keine Grafikkarte nötig (die GTX 1050 Ti bleibt der Video-Zentrale).
+2. Ollama **nicht** im Nginx Proxy Manager freigeben – es hat keine Anmeldung und ist nur fürs Heimnetz gedacht.
+3. In MLZ-Protokoll: **Mehr → Einstellungen → KI-Ausfüllhilfe**
+   - KI: „lokal auf dem Server (Ollama)“
+   - Ollama-Adresse: `http://192.168.1.10:11434`
+   - Modell: `qwen2.5:7b-instruct` (gute Qualität, ca. 4,7 GB; schneller, aber ungenauer: `qwen2.5:3b-instruct`)
+   - **Speichern** → **Modell laden** (einmalig, dauert je nach Leitung einige Minuten) → **Verbindung testen**.
+4. Startseite → **„Sprechen – die App füllt aus“**. Nach der Spracherkennung füllt die KI die Felder aus
+   (auf dem Xeon geschätzt 1–3 Minuten). Du kannst die App solange schließen; der fertige Entwurf steht unter
+   „Logbuch → Entwürfe“ und auf der Startseite unter „Zu erledigen“.
+
+Alternativ **Claude** (Anthropic): schneller und genauer, aber der erkannte Text geht in die USA. Für BR-Inhalte und Namen
+von Kolleginnen und Kollegen besser lokal bleiben.
+
 ## 5. HTTPS über Nginx Proxy Manager (nötig für Mikrofon, Kamera, Passkey)
 
 Wie bei `studio.flexisticker.de`:

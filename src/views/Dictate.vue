@@ -7,9 +7,11 @@ import Recorder from '../components/Recorder.vue';
 import FileItem from '../components/FileItem.vue';
 import Modal from '../components/Modal.vue';
 import { deleteDraft, finalizeDraft, newDraft, queueEvidence, queueFile, saveDraft, settings, store, toast } from '../services/store.js';
+import { api } from '../services/api.js';
+import { KINDS, mergeAssist } from '../../shared/assist.js';
 import { webSpeech, webSpeechAvailable } from '../services/recorder.js';
 import { CATEGORIES } from '../services/categories.js';
-import { debounce, localNow, uuid } from '../services/util.js';
+import { debounce, localNow, uuid, toB64 } from '../services/util.js';
 
 const route = useRoute();
 const router = useRouter();
@@ -25,7 +27,7 @@ onMounted(async () => {
   const id = route.params.id;
   let draft = id && store.drafts.find((x) => x.id === id);
   if (!draft) {
-    draft = newDraft(route.query.bereich === 'br' ? 'br' : 'incident');
+    draft = newDraft(route.query.bereich === 'br' ? 'br' : 'incident', { sectionChosen: route.query.bereich === 'br' });
     await saveDraft(draft);
     router.replace(`/diktat/${draft.id}${route.query.foto ? '?foto=1' : ''}`);
   }
@@ -34,18 +36,57 @@ onMounted(async () => {
 });
 const save = debounce(() => { if (d.value) saveDraft(d.value); }, 600);
 watch(d, save, { deep: true });
-onBeforeUnmount(() => { if (d.value && store.drafts.some((x) => x.id === d.value.id)) saveDraft(d.value); live.value?.(); });
+onBeforeUnmount(() => { clearInterval(poll); if (d.value && store.drafts.some((x) => x.id === d.value.id)) saveDraft(d.value); live.value?.(); });
+
+// ------------------------------------------------------------ KI-Ausfüllhilfe
+const assistOn = computed(() => store.assist?.engine && store.assist.engine !== 'off');
+const st = computed(() => d.value?.assist?.status || '');
+const waiting = computed(() => d.value?.assistWanted && ['upload', 'transcribing', 'queued', 'running'].includes(st.value));
+const ai = (f) => !!d.value?.[f] && d.value.aiFields?.[f] === d.value[f];
+let poll = setInterval(async () => {
+  if (!d.value?.assistWanted || !['upload', 'transcribing', 'queued', 'running', ''].includes(st.value) || !store.online) return;
+  try {
+    const server = await api(`/drafts/${d.value.id}`);
+    const before = d.value.assist?.status;
+    d.value = mergeAssist(d.value, server);
+    if (before !== 'done' && d.value.assist?.status === 'done') toast('Von der KI ausgefüllt – bitte prüfen');
+    if (d.value.assist?.status === 'off') pasteTranscripts();
+  } catch { /* noch nicht beim Server */ }
+}, 4000);
+async function runAssist() {
+  try { d.value = mergeAssist(d.value, await api(`/assist/draft/${d.value.id}`, { method: 'POST', body: {} })); d.value.assistWanted = true; } catch (e) { toast(e.message); }
+}
+function pasteTranscripts() {
+  for (const fid of d.value.fileIds) {
+    const t = store.data?.transcripts?.[fid]?.text;
+    if (t && !d.value.applied.includes(fid)) onTranscript(fid, t, true);
+  }
+}
+const suggestionKind = computed(() => { const k = d.value?.assist?.status === 'done' && d.value.suggestion?.kind; return ['time', 'absence', 'brtime'].includes(k) && !d.value.keepEntry ? k : ''; });
+function useSuggestion() {
+  const sg = d.value.suggestion;
+  const q = { entwurf: d.value.id };
+  if (sg.kind === 'time') router.push({ path: `/zeit/tag/${sg.time.date}`, query: { ...q, vorschlag: toB64({ ...sg.time, spoken: sg.spoken, fileId: d.value.fileIds.find((f) => d.value.files[f]?.purpose === 'audio') || '' }) } });
+  if (sg.kind === 'absence') router.push({ path: '/abwesenheit', query: { ...q, vorschlag: toB64(sg.absence) } });
+  if (sg.kind === 'brtime') router.push({ path: '/betriebsrat', query: { ...q, vorschlag: toB64(sg.brtime) } });
+}
+function keepAsEntry() {
+  d.value.keepEntry = true;
+  if (!d.value.facts && d.value.suggestion?.spoken) d.value.facts = d.value.suggestion.spoken;
+}
 
 const cats = computed(() => CATEGORIES[d.value?.section] || []);
 const late = computed(() => d.value && d.value.eventAt && (Date.now() - new Date(d.value.eventAt).getTime()) > 36 * 3600e3);
 const cases = computed(() => Object.values(store.data?.cases || {}).filter((c) => !c.closed));
 
 async function recorded({ blob, startedAt, durationSec }) {
-  const f = await queueFile(blob, { purpose: 'audio', draftId: d.value.id, capturedAt: startedAt, durationSec });
+  const withAi = assistOn.value;
+  if (withAi) { d.value.assistWanted = true; d.value.assist = { ...(d.value.assist || {}), status: 'upload' }; }
+  const f = await queueFile(blob, { purpose: 'audio', draftId: d.value.id, capturedAt: startedAt, durationSec, assist: withAi });
   d.value.fileIds.push(f.id);
   d.value.files[f.id] = { purpose: 'audio', mime: f.mime, size: f.size, capturedAt: f.capturedAt, durationSec, sha256: f.sha256 };
   saveDraft(d.value);
-  toast('Aufnahme gespeichert – Text wird erkannt');
+  toast(withAi ? 'Aufnahme gespeichert – die App erkennt den Text und füllt aus' : 'Aufnahme gespeichert – Text wird erkannt');
 }
 async function pick(e, purpose) {
   for (const file of e.target.files || []) {
@@ -56,8 +97,9 @@ async function pick(e, purpose) {
   e.target.value = '';
   saveDraft(d.value);
 }
-function onTranscript(fid, text) {
+function onTranscript(fid, text, force = false) {
   if (!d.value || d.value.applied.includes(fid) || !text || text === '(keine Sprache erkannt)') return;
+  if (!force && d.value.assistWanted && st.value !== 'off') return; // die KI füllt die Felder aus
   d.value.applied.push(fid);
   d.value.facts = d.value.facts.trim() ? `${d.value.facts.trim()}\n\n${text}` : text;
   toast('Erkannter Text in „Was ist passiert?“ übernommen – bitte prüfen');
@@ -102,14 +144,14 @@ async function remove() {
   d.value = null;
   router.replace('/logbuch');
 }
-const setNow = () => { d.value.eventAt = localNow(); };
+const setNow = () => { d.value.eventAt = localNow(); d.value.eventAtAuto = false; };
 </script>
 
 <template>
   <div v-if="d" class="page">
     <div class="seg" style="margin-bottom: 12px">
-      <button :class="{ on: d.section === 'incident' }" @click="d.section = 'incident'">Auffälligkeit</button>
-      <button :class="{ on: d.section === 'br' }" @click="d.section = 'br'">Betriebsrat</button>
+      <button :class="{ on: d.section === 'incident' }" @click="d.section = 'incident'; d.sectionChosen = true">Auffälligkeit</button>
+      <button :class="{ on: d.section === 'br' }" @click="d.section = 'br'; d.sectionChosen = true">Betriebsrat</button>
     </div>
 
     <div class="card">
@@ -126,12 +168,31 @@ const setNow = () => { d.value.eventAt = localNow(); };
       <small class="muted" style="display: block; margin-top: 6px">Zustände fotografieren (Aushang, Mangel, Dienstplan), keine Personen. Keine vertraulichen Firmenunterlagen abfotografieren.</small>
     </div>
 
+    <div v-if="d.assistWanted && st" class="alert" :class="{ ok: st === 'done', bad: st === 'error', warn: suggestionKind }">
+      <template v-if="st === 'upload'">⏳ Aufnahme wird hochgeladen …</template>
+      <template v-else-if="st === 'transcribing'">⏳ Sprache wird erkannt …</template>
+      <template v-else-if="st === 'queued' || st === 'running'">✨ Die KI füllt die Felder aus … <small>(lokal 1–3 Min. – du kannst die App schließen, der Entwurf wartet unter „Logbuch → Entwürfe“)</small></template>
+      <template v-else-if="st === 'error'">
+        KI-Ausfüllen fehlgeschlagen: {{ d.assist.error }}
+        <div class="row wrap" style="margin-top: 6px"><button class="btn small" @click="runAssist">Erneut</button><button class="btn small" @click="pasteTranscripts">Text selbst übernehmen</button></div>
+      </template>
+      <template v-else-if="st === 'done' && suggestionKind">
+        Das klingt nach <b>{{ KINDS[suggestionKind] }}</b>, nicht nach einem Logbuch-Eintrag.
+        <div class="row wrap" style="margin-top: 6px"><button class="btn small primary" @click="useSuggestion">Als {{ KINDS[suggestionKind] }} erfassen</button><button class="btn small" @click="keepAsEntry">Doch als Logbuch-Eintrag</button></div>
+      </template>
+      <template v-else-if="st === 'done'">
+        ✨ Von der KI ausgefüllt ({{ d.assist.engine }}, {{ d.assist.seconds }} s). <b>Bitte jedes Feld prüfen</b> – mit „KI“ markierte Felder stammen unverändert von ihr.
+        <div v-if="d.assist.missing?.length" style="margin-top: 6px"><b>Es fehlt noch:</b><div v-for="q in d.assist.missing" :key="q">• {{ q }}</div><small>Einfach nochmal sprechen – die App ergänzt.</small></div>
+      </template>
+    </div>
+    <button v-if="assistOn && !d.assistWanted && d.fileIds.some((f) => store.data?.transcripts?.[f])" class="btn block" style="margin-bottom: 12px" @click="runAssist">✨ Von der KI ausfüllen lassen</button>
+
     <FileItem v-for="fid in d.fileIds" :id="fid" :key="fid" :meta="d.files[fid]" removable @remove="removeFile(fid)" @transcript="onTranscript(fid, $event)" />
 
     <div class="card">
-      <h3>Wann?</h3>
+      <h3>Wann? <span v-if="ai('eventAt')" class="badge ai">KI</span></h3>
       <div class="row">
-        <input v-model="d.eventAt" type="datetime-local" class="grow" />
+        <input v-model="d.eventAt" type="datetime-local" class="grow" @input="d.eventAtAuto = false" />
         <button class="btn small" type="button" @click="setNow">Jetzt</button>
       </div>
       <label class="f">bis (Uhrzeit, optional)</label>
@@ -141,28 +202,28 @@ const setNow = () => { d.value.eventAt = localNow(); };
         <input v-model="d.delayReason" />
       </template>
 
-      <label class="f">Kurztitel</label>
+      <label class="f">Kurztitel <span v-if="ai('title')" class="badge ai">KI</span></label>
       <input v-model="d.title" placeholder="z. B. Anweisung Mehrarbeit ohne Ankündigung" />
-      <label class="f">Art</label>
+      <label class="f">Art <span v-if="ai('category')" class="badge ai">KI</span></label>
       <select v-model="d.category"><option value="">– wählen –</option><option v-for="c in cats" :key="c">{{ c }}</option></select>
-      <label class="f">Wo?</label>
+      <label class="f">Wo? <span v-if="ai('location')" class="badge ai">KI</span></label>
       <input v-model="d.location" placeholder="Ort, Abteilung, Raum, Telefon, Mail …" />
     </div>
 
     <div class="card">
-      <h3>Was ist passiert? <small>(nur Tatsachen)</small></h3>
+      <h3>Was ist passiert? <small>(nur Tatsachen)</small> <span v-if="ai('facts')" class="badge ai">KI</span></h3>
       <textarea v-model="d.facts" rows="7" placeholder="Wer hat was getan oder gesagt? Reihenfolge, Uhrzeiten, Umstände. Keine Bewertungen – die kommen unten." />
-      <label class="f">Wörtliche Äußerungen<span class="hint">möglichst genau, in Anführungszeichen, mit wer hat es gesagt</span></label>
+      <label class="f">Wörtliche Äußerungen <span v-if="ai('quotes')" class="badge ai">KI</span><span class="hint">möglichst genau, in Anführungszeichen, mit wer hat es gesagt</span></label>
       <textarea v-model="d.quotes" rows="3" placeholder="Herr X: „…“" />
-      <label class="f">Beteiligte Personen<span class="hint">Name und Funktion – nur so viel wie nötig</span></label>
+      <label class="f">Beteiligte Personen <span v-if="ai('persons')" class="badge ai">KI</span><span class="hint">Name und Funktion – nur so viel wie nötig</span></label>
       <input v-model="d.persons" />
-      <label class="f">Zeugen / wer war dabei?</label>
+      <label class="f">Zeugen / wer war dabei? <span v-if="ai('witnesses')" class="badge ai">KI</span></label>
       <input v-model="d.witnesses" />
-      <label class="f">Folgen<span class="hint">für Arbeit, Arbeitszeit, Gesundheit, BR-Arbeit</span></label>
+      <label class="f">Folgen <span v-if="ai('consequences')" class="badge ai">KI</span><span class="hint">für Arbeit, Arbeitszeit, Gesundheit, BR-Arbeit</span></label>
       <textarea v-model="d.consequences" rows="2" />
-      <label class="f">Meine Reaktion / Meldung<span class="hint">was ich gesagt/getan habe, wem gemeldet (wann, wie)</span></label>
+      <label class="f">Meine Reaktion / Meldung <span v-if="ai('reaction')" class="badge ai">KI</span><span class="hint">was ich gesagt/getan habe, wem gemeldet (wann, wie)</span></label>
       <textarea v-model="d.reaction" rows="2" />
-      <label class="f">Meine Bewertung<span class="hint">getrennt von den Tatsachen – wie habe ich es empfunden?</span></label>
+      <label class="f">Meine Bewertung <span v-if="ai('assessment')" class="badge ai">KI</span><span class="hint">getrennt von den Tatsachen – wie habe ich es empfunden?</span></label>
       <textarea v-model="d.assessment" rows="2" />
     </div>
 

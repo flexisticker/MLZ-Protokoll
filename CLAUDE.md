@@ -29,6 +29,19 @@ Eigenständiges Projekt (nicht Teil von Flex-Studio). **Keine Passwörter, Token
   threads}, Standard small/small/4) unter Prüfung → Spracherkennung, Route `PUT /api/transcribe/config`. Status `download` beim Laden.
   Bewusst **nicht** über die Video-Zentrale (keine Schnittstelle dort, Warteschlange mit langen Videos, Rechenhelfer pausiert beim Zocken,
   BR-Inhalte sollen nicht durch das Video-System). „Namen und Fachwörter“ → `--prompt`.
+- **KI-Ausfüllhilfe** (1.2.0) `server/assist.js` + `shared/assist.js`: Startseite „Sprechen – die App füllt aus“ → Diktat-Entwurf mit
+  `assistWanted`; Upload mit Kopf `x-assist: 1` + `x-draft` → Server legt/ergänzt den Entwurf (`draftForUpload`), nach jedem Transkript
+  (`onTranscript`) läuft die KI, wenn alle Aufnahmen des Entwurfs erkannt sind. Engines: `ollama` (Standard-Empfehlung, `/api/chat` mit
+  `format` = JSON-Schema, temperature 0, num_ctx 8192, Modell `qwen2.5:7b-instruct`, „Modell laden“ = `/api/pull`) oder `claude`
+  (offizielles SDK `@anthropic-ai/sdk`, `claude-opus-5-5`, `output_config.format` json_schema + effort low, `fallbacks: 'default'`;
+  SDK 1.3 schickt den Schlüssel als `Authorization: Bearer`). Einstellungen in kv `assist` (Schlüssel nie in der Kette), Route
+  `PUT /api/assist/config`, Test `/api/assist/test`. Ergebnis = Beweiseintrag **`assist`** (ref = Entwurf) + Felder im Entwurf:
+  `aiFields` (was die KI gesetzt hat), `assist {status upload|transcribing|queued|running|done|error|off, engine, model, missing[], evidenceId}`,
+  `suggestion {kind, time, absence, brtime, spoken}`. **`mergeAssist`** (Server-PUT, Browser-Abfrage, `loadDrafts`): KI überschreibt nur leere
+  Felder oder eigene alte KI-Werte, Bereich nur ohne `sectionChosen`, `eventAt` solange `eventAtAuto`. kind time/absence/brtime → Knopf
+  leitet ins Formular (`?vorschlag=<base64 JSON>&entwurf=<id>`, nach Speichern Entwurf gelöscht); bei Arbeitszeit überschreibt der
+  Regel-Parser die Uhrzeiten der KI. Festgeschriebener Eintrag trägt `ai {evidenceId, engine, model, kept[], edited[]}` → PDF-Hinweis.
+  Engine `off`: Status `off`, Browser übernimmt den Text wie bisher.
 - Zeitstempel `server/anchors.js`: `openssl ts` → FreeTSA + DigiCert (RFC 3161), nachts 23:30 und ~10 Min. nach neuen Einträgen;
   Tabelle `anchors` unveränderbar (außer `mailed_at`). Prüfwert-Mail `server/mail.js` (SMTP in kv, nicht in der Kette).
 - Export `server/export.js`: ZIP (bericht.pdf via pdfkit, daten.json, kette.json, dateien/, zeitstempel/, MANIFEST.sha256, verify.py/.sh).
@@ -40,8 +53,9 @@ Eigenständiges Projekt (nicht Teil von Flex-Studio). **Keine Passwörter, Token
   Sitzungen als Hash, Sperre 8 Fehlversuche/Std., CSRF-Kopf **`X-MLZ: 1`**. Notfall: `node server/reset-login.js <name>` in der Container-Konsole.
 
 ## Testen
-- `npm test` (13 Tests), `node test/mock-services.mjs` (Zeitstempeldienst :8098 mit eigener CA in `test/.tsa/`), Spracherkennung per
-  `WHISPER_BIN=$PWD/test/fake-whisper.sh` (braucht eine – auch leere – Modelldatei `ggml-small.bin` in `MODEL_DIR` oder `DATA_DIR/whisper`),
+- `npm test` (16 Tests), `node test/mock-services.mjs` (Zeitstempeldienst :8098 mit eigener CA in `test/.tsa/`, Ollama-Attrappe :8097,
+  Claude-Attrappe :8096 mit `CLAUDE_BASE_URL=http://127.0.0.1:8096`, Schlüssel `sk-ant-test`), Spracherkennung per
+  `WHISPER_BIN=$PWD/test/fake-whisper.sh` (Text über `FAKE_WHISPER_TEXT_FILE`; braucht eine – auch leere – Modelldatei `ggml-small.bin` in `MODEL_DIR` oder `DATA_DIR/whisper`),
   Server mit `TSA_URLS=http://127.0.0.1:8098/tsr TSA_CA_FILE=$PWD/test/.tsa/ca.crt WHISPER_PRELOAD=off`.
   Echtes whisper-cli lässt sich hier bauen (cmake/g++ vorhanden), Modelle von huggingface sind aus der Sandbox gesperrt.
 - Playwright (global, Chromium `/opt/pw-browsers`) mit `--use-fake-device-for-media-stream --use-fake-ui-for-media-stream` für das Mikrofon.
@@ -50,7 +64,10 @@ Eigenständiges Projekt (nicht Teil von Flex-Studio). **Keine Passwörter, Token
   (UPDATE/DELETE abgelehnt), TOTP/Sperre/CSRF, Notfall-Reset, Produktions-Install (`npm ci --omit=dev`).
 - 1.1.0: whisper-cli 1.9.5 hier gebaut (Optionen geprüft, Fehler „Modell defekt“ sauber gemeldet), Attrappe mit eingehängtem Modell-Ordner,
   Modellwechsel mit gesperrtem Download → verständliche Fehlermeldung + „Erneut“.
-- **Nicht getestet:** echte Erkennung mit echtem Modell (huggingface gesperrt), Rechenzeit auf dem Xeon, echte FreeTSA/DigiCert (Sandbox gesperrt), Docker-Build (kein Daemon),
+- 1.2.0 (Playwright + Attrappen): KI einstellen/testen, Sprechen → Felder ausgefüllt + markiert → eigene Änderung → Festschreiben
+  (Bereich BR erkannt, `ai.kept/edited` korrekt), Arbeitszeit-Satz → Vorschlag → Zeitformular vorbefüllt → Entwurf gelöscht, Export mit
+  `assist`-Eintrag + PDF-Hinweis (verify.py ok), Claude falscher/richtiger Schlüssel, KI aus → Status off.
+- **Nicht getestet:** echtes Ollama/Qwen (Qualität und Dauer auf dem Xeon), echtes Claude, echte Erkennung mit echtem Modell (huggingface gesperrt), Rechenzeit auf dem Xeon, echte FreeTSA/DigiCert (Sandbox gesperrt), Docker-Build (kein Daemon),
   echtes Android-Handy (Mikrofon, Installation, Passkey), Gmail-Versand, rclone.
 
 ## Versionen
@@ -59,9 +76,10 @@ Eigenständiges Projekt (nicht Teil von Flex-Studio). **Keine Passwörter, Token
   Modellwahl in der App.
 - **1.1.1 (24.10.2026):** `reset-login.js <name>` legt den ersten Benutzer an, wenn noch keiner existiert (Einmal-Passwort, Wechsel erzwungen).
   Anlass: Kunde sah beim ersten Aufruf eine Anmeldung statt „Einrichten“ (Ursache ungeklärt, Server meldete setup:true).
+- **1.2.0 (24.10.2026):** KI-Ausfüllhilfe (Ollama lokal, Claude optional), Knopf „Sprechen – die App füllt aus“.
 
 ## Offene Punkte / Ideen
 - Nach der Installation: Erkennungsdauer auf dem Xeon messen; bei guter Zeit Diktat-Modell auf `large-v3-turbo-q5_0` stellen.
   Später möglich: CUDA-Build wie in der Video-Zentrale (GTX 1050 Ti mitnutzen) – macht das Image deutlich größer.
 - Optional: qualifizierter eIDAS-Zeitstempel (kostenpflichtig) über `TSA_URLS`; Dateien zusätzlich mit AES-GCM verschlüsseln;
-  Ollama für Zeitsätze, die der Regel-Parser nicht versteht.
+  Ollama-Prompt nach echten Diktaten nachschärfen (Beispiele des Kunden sammeln).

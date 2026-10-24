@@ -1,20 +1,30 @@
 <script setup>
-import { computed, ref } from 'vue';
+import { computed, onMounted, ref } from 'vue';
+import { useRoute } from 'vue-router';
 import Icon from '../components/Icon.vue';
 import Modal from '../components/Modal.vue';
-import { queueEvidence, store, toast } from '../services/store.js';
+import { deleteDraft, queueEvidence, store, toast } from '../services/store.js';
 import { brAcc } from '../services/derived.js';
 import { fmtDur } from '../../shared/worktime.js';
-import { de, minutesBetween, nowTime, today, uuid } from '../services/util.js';
+import { de, minutesBetween, nowTime, today, uuid, fromB64 } from '../services/util.js';
 
 const list = computed(() => Object.values(store.data?.br || {}).sort((a, b) => (b.date + b.start).localeCompare(a.date + a.start)));
 const acc = computed(() => (store.data ? brAcc() : null));
+const route = useRoute();
 const form = ref(null);
 const cancel = ref(null);
 function open() { form.value = { id: uuid(), date: today(), start: nowTime(), end: '', outside: false, topic: '', place: '', abmeldungTo: '', abmeldungAt: nowTime(), rueckmeldungAt: '', reasonOutside: '', note: '', paid: false }; }
+onMounted(() => { // Vorschlag der KI-Ausfüllhilfe
+  const sg = route.query.vorschlag && fromB64(route.query.vorschlag);
+  if (!sg) return;
+  open();
+  Object.assign(form.value, { date: sg.date || today(), start: sg.start || form.value.start, end: sg.end || '', outside: !!sg.outside, topic: sg.topic || '', place: sg.place || '', abmeldungTo: sg.abmeldungTo || '' });
+  toast('Vorschlag der KI übernommen – bitte prüfen');
+});
 async function save() {
   if (!form.value.start || !form.value.end) return toast('Beginn und Ende angeben');
   await queueEvidence('br', { ...form.value }, { id: form.value.id, label: 'BR-Tätigkeit' });
+  if (route.query.entwurf) await deleteDraft(String(route.query.entwurf));
   form.value = null;
   toast('Gespeichert');
 }

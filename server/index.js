@@ -17,6 +17,8 @@ import { writeExport } from './export.js';
 import { anchorSoon, backupNow, fullCheck, localDay, startScheduler } from './scheduler.js';
 import { sendMail, setSmtp, smtpPublic } from './mail.js';
 import { withDefaults } from '../shared/worktime.js';
+import { mergeAssist } from '../shared/assist.js';
+import * as assist from './assist.js';
 
 const ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const DIST = path.join(ROOT, 'dist');
@@ -26,7 +28,7 @@ const COOKIE = 'mlz_s';
 
 onAppend((r) => {
   invalidate();
-  if (r.kind === 'transcript') tr.resetCache();
+  if (r.kind === 'transcript') { tr.resetCache(); setImmediate(() => assist.onTranscript(r.ref)); }
   if (['entry', 'addendum', 'time', 'br', 'absence', 'claim', 'stamp'].includes(r.kind)) anchorSoon();
 });
 tr.setPromptWords(build().settings.promptWords);
@@ -168,6 +170,10 @@ function validate(kind, ref, p) {
         location: str(p.location, 300), persons: str(p.persons, 1000), witnesses: str(p.witnesses, 1000), facts: str(p.facts, 20000), quotes: str(p.quotes, 8000),
         consequences: str(p.consequences, 4000), reaction: str(p.reaction, 4000), assessment: str(p.assessment, 8000), delayReason: str(p.delayReason, 1000),
         caseId: p.caseId && st.cases[p.caseId] ? p.caseId : '', fileIds: fileIds(p.fileIds), draftId: str(p.draftId, 64), draftCreatedAt: str(p.draftCreatedAt, 40),
+        ...(p.ai?.evidenceId && getRow(String(p.ai.evidenceId))?.kind === 'assist' ? { ai: {
+          evidenceId: String(p.ai.evidenceId), engine: str(p.ai.engine, 60), model: str(p.ai.model, 80),
+          kept: (Array.isArray(p.ai.kept) ? p.ai.kept : []).map(String).slice(0, 20), edited: (Array.isArray(p.ai.edited) ? p.ai.edited : []).map(String).slice(0, 20),
+        } } : {}),
       };
     }
     case 'addendum': case 'retract':
@@ -241,6 +247,10 @@ app.post('/api/evidence', wrap(async (req, res) => {
 app.post('/api/files', wrap(async (req, res) => {
   const { row, duplicate } = await receiveUpload(req, device(req));
   const p = parsePayload(row);
+  if (req.get('x-assist') === '1' && p?.draftId) {
+    assist.draftForUpload(p.draftId, row.id, { purpose: p.purpose, mime: p.mime, size: p.size, capturedAt: row.captured_at, durationSec: p.durationSec, sha256: p.sha256 });
+    if (tr.transcriptOf(row.id)) assist.onTranscript(row.id);
+  }
   if (p?.purpose?.includes('audio')) tr.enqueue(row.id, { fast: p.purpose === 'time-audio', front: p.purpose === 'time-audio' });
   res.json({ row: { ...row, payload: undefined }, file: fileInfo(row.id), duplicate });
 }));
@@ -265,10 +275,18 @@ app.put('/api/transcribe/config', wrap(async (req, res) => {
 
 // ------------------------------------------------------------ Entwürfe (änderbar, noch nicht festgeschrieben)
 app.get('/api/drafts', (req, res) => res.json(db.prepare('SELECT * FROM drafts ORDER BY updated_at DESC').all().map((d) => ({ ...JSON.parse(d.data), id: d.id, updatedAt: d.updated_at }))));
+app.get('/api/drafts/:id', (req, res) => {
+  const d = assist.getDraft(req.params.id);
+  if (!d) return res.status(404).json({ error: 'Entwurf nicht gefunden' });
+  res.json(d);
+});
 app.put('/api/drafts/:id', (req, res) => {
   if (!ID_RE.test(req.params.id)) throw bad('Ungültige Kennung');
   if (getRow(req.body?.entryId || '-')) { db.prepare('DELETE FROM drafts WHERE id = ?').run(req.params.id); return res.json({ finalized: true }); }
-  const data = JSON.stringify(req.body || {});
+  // KI-Ergebnisse, die der Server inzwischen eingetragen hat, nicht mit einem älteren Stand vom Handy überschreiben
+  const server = assist.getDraft(req.params.id);
+  const merged = server ? mergeAssist({ ...(req.body || {}) }, server) : (req.body || {});
+  const data = JSON.stringify(merged);
   if (data.length > 200000) throw bad('Entwurf zu groß');
   const now = new Date().toISOString();
   const old = db.prepare('SELECT updated_at FROM drafts WHERE id = ?').get(req.params.id);
@@ -278,6 +296,24 @@ app.put('/api/drafts/:id', (req, res) => {
   res.json({ ok: true });
 });
 app.delete('/api/drafts/:id', (req, res) => { db.prepare('DELETE FROM drafts WHERE id = ?').run(req.params.id); res.json({ ok: true }); });
+
+// ------------------------------------------------------------ KI-Ausfüllhilfe
+app.get('/api/assist/status', (req, res) => res.json(assist.status()));
+app.put('/api/assist/config', (req, res) => res.json(assist.setConfig(req.body || {})));
+app.post('/api/assist/test', wrap(async (req, res) => {
+  try { res.json(await assist.testConnection()); } catch (e) { res.json({ ok: false, error: e.message }); }
+}));
+app.post('/api/assist/pull', wrap(async (req, res) => res.json(await assist.pullModel())));
+app.post('/api/assist/draft/:id', (req, res) => {
+  const d = assist.getDraft(req.params.id);
+  if (!d) return res.status(404).json({ error: 'Entwurf noch nicht beim Server – kurz warten' });
+  if (assist.config().engine === 'off') return res.status(400).json({ error: 'KI-Ausfüllhilfe ist aus (Einstellungen)' });
+  d.assistWanted = true;
+  d.assist = { ...(d.assist || {}), status: 'queued', error: '', updatedAt: new Date().toISOString() };
+  assist.putDraft(d);
+  assist.enqueue(d.id);
+  res.json(d);
+});
 
 // ------------------------------------------------------------ Prüfung, Zeitstempel, Export, Sicherung
 app.get('/api/verify', (req, res) => res.json(req.query.run === '1' ? fullCheck() : kvGet('lastCheck') || fullCheck()));

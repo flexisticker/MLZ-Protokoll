@@ -66,6 +66,11 @@ const holiday = computed(() => holidayName(today(), s.value.state, s.value.extra
       <div class="row"><router-link to="/hinweise" class="btn small">Mehr dazu</router-link><button class="btn small primary" @click="closeHints">Verstanden</button></div>
     </div>
 
+    <router-link class="btn rec block speak" to="/diktat?bereich=incident"><Icon name="mic" :size="26" /> Sprechen – die App füllt aus</router-link>
+    <p class="muted" style="font-size: .85rem; margin: 6px 2px 12px">
+      <template v-if="store.assist?.engine && store.assist.engine !== 'off'">Einfach erzählen: Vorfall, BR-Sache, Arbeitszeit oder Urlaub – die App erkennt, worum es geht, und füllt das passende Formular aus.</template>
+      <template v-else>Die KI-Ausfüllhilfe ist aus – dann landet der gesprochene Text in „Was ist passiert?“. Einschalten: <router-link to="/einstellungen#ki">Einstellungen</router-link>.</template>
+    </p>
     <div class="tiles">
       <router-link class="tile red" to="/diktat?bereich=incident"><span class="ico"><Icon name="mic" /></span>Auffälligkeit diktieren</router-link>
       <router-link class="tile" to="/diktat?bereich=br"><span class="ico"><Icon name="users" /></span>Betriebsrat diktieren</router-link>

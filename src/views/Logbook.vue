@@ -33,7 +33,11 @@ const cases = computed(() => Object.values(store.data?.cases || {}));
         <li v-for="d in store.drafts" :key="d.id">
           <router-link class="item" :to="`/diktat/${d.id}`">
             <Icon name="edit" />
-            <div class="grow"><b>{{ d.title || d.facts?.slice(0, 50) || 'ohne Titel' }}</b><br /><small>{{ deLocal(d.eventAt) }} · {{ d.fileIds.length }} Anlage(n)</small></div>
+            <div class="grow"><b>{{ d.title || d.facts?.slice(0, 50) || (d.assistWanted ? 'Gesprochene Notiz' : 'ohne Titel') }}</b>
+              <span v-if="d.assistWanted && d.assist?.status === 'done'" class="badge ai">KI fertig – prüfen</span>
+              <span v-else-if="d.assistWanted && ['upload', 'transcribing', 'queued', 'running'].includes(d.assist?.status)" class="badge">wird ausgefüllt …</span>
+              <span v-else-if="d.assist?.status === 'error'" class="badge inc">KI-Fehler</span>
+              <br /><small>{{ deLocal(d.eventAt) }} · {{ d.fileIds.length }} Anlage(n)</small></div>
             <Icon name="right" />
           </router-link>
         </li>

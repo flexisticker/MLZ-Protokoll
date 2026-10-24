@@ -27,6 +27,15 @@
     </div>
 
     <div class="card">
+      <h2>KI-Ausfüllhilfe</h2>
+      <ul>
+        <li>Die KI verteilt nur, was du gesagt hast, auf die Felder. Sie kann sich irren oder etwas falsch zuordnen – <b>jedes Feld vor dem Festschreiben prüfen</b>. Mit „KI“ markierte Felder stammen unverändert von ihr.</li>
+        <li>Deine Original-Aufnahme, das wörtliche Transkript und der Vorschlag der KI bleiben in der Beweiskette. Im Bericht steht, welche Felder du übernommen oder geändert hast. So ist offen erkennbar, was von dir stammt.</li>
+        <li>Standard ist die lokale KI auf deinem Server. Bei Claude (Anthropic) geht der Text ins Ausland – für BR-Inhalte und Daten von Kollegen nicht empfohlen.</li>
+      </ul>
+    </div>
+
+    <div class="card">
       <h2>Was du nicht tun solltest</h2>
       <ul>
         <li><b>Keine Gespräche heimlich aufnehmen</b> – auch nicht mit Vorgesetzten oder in Sitzungen. Das ist strafbar (§ 201 StGB) und vor Gericht in der Regel nicht verwertbar. Nur die eigenen Notizen diktieren, nach dem Gespräch.</li>

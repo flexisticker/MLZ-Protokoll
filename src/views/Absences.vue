@@ -1,23 +1,33 @@
 <script setup>
-import { computed, ref } from 'vue';
+import { computed, onMounted, ref } from 'vue';
+import { useRoute } from 'vue-router';
 import Icon from '../components/Icon.vue';
 import Modal from '../components/Modal.vue';
-import { queueEvidence, settings, store, toast } from '../services/store.js';
+import { deleteDraft, queueEvidence, settings, store, toast } from '../services/store.js';
 import { vacation } from '../services/derived.js';
 import { ABSENCE_TYPES, vacationDays } from '../../shared/worktime.js';
-import { de, today, uuid } from '../services/util.js';
+import { de, today, uuid, fromB64 } from '../services/util.js';
 
 const year = ref(Number(today().slice(0, 4)));
 const acc = computed(() => (store.data ? vacation(year.value) : null));
 const list = computed(() => Object.values(store.data?.absences || {}).filter((a) => a.from.slice(0, 4) <= String(year.value) && (a.to || a.from).slice(0, 4) >= String(year.value)).sort((a, b) => b.from.localeCompare(a.from)));
+const route = useRoute();
 const form = ref(null);
 const cancel = ref(null);
 function open() { form.value = { id: uuid(), type: 'urlaub', from: today(), to: today(), half: false, approvedBy: '', approvedAt: '', requestedAt: '', note: '' }; }
 const days = computed(() => (form.value ? vacationDays(form.value, settings()) : 0));
+onMounted(() => { // Vorschlag der KI-Ausfüllhilfe
+  const sg = route.query.vorschlag && fromB64(route.query.vorschlag);
+  if (!sg) return;
+  open();
+  Object.assign(form.value, { type: sg.type || 'urlaub', from: sg.from || today(), to: sg.to || sg.from || today(), half: !!sg.half, approvedBy: sg.approvedBy || '' });
+  toast('Vorschlag der KI übernommen – bitte prüfen');
+});
 async function save() {
   const p = { ...form.value, to: form.value.to || form.value.from };
   if (p.to < p.from) return toast('Ende liegt vor dem Beginn');
   await queueEvidence('absence', p, { id: p.id, label: 'Abwesenheit' });
+  if (route.query.entwurf) await deleteDraft(String(route.query.entwurf));
   form.value = null;
   toast('Gespeichert');
 }
@@ -86,3 +96,4 @@ async function doCancel() {
     </Modal>
   </div>
 </template>
+

@@ -1,0 +1,33 @@
+import assert from 'node:assert/strict';
+import test from 'node:test';
+import { aiSummary, mergeAssist, normalize, SCHEMA } from '../shared/assist.js';
+
+test('Schema: alle Felder Pflicht, keine Zusatzfelder (für Ollama und Claude)', () => {
+  assert.equal(SCHEMA.additionalProperties, false);
+  assert.deepEqual(SCHEMA.required.sort(), Object.keys(SCHEMA.properties).sort());
+  for (const k of ['time', 'absence', 'brtime']) assert.equal(SCHEMA.properties[k].additionalProperties, false);
+});
+
+test('normalize: ungültige Werte werden verworfen, Zeitpunkt gebildet', () => {
+  const n = normalize({ kind: 'quatsch', eventDate: '2026-10-23', eventTime: '7:05', title: '  Titel ', persons: '', time: { breakMinutes: 9999 } }, '2026-10-24T09:00');
+  assert.equal(n.kind, 'incident');
+  assert.equal(n.fields.eventAt, '2026-10-23T07:05');
+  assert.equal(n.fields.title, 'Titel');
+  assert.ok(!('persons' in n.fields));
+  assert.equal(n.time.breakMinutes, 600);
+});
+
+test('mergeAssist: eigene Änderungen bleiben, KI füllt Leeres und eigene alte KI-Werte', () => {
+  const mine = { fileIds: ['a'], facts: 'selbst geschrieben', title: 'alter KI-Titel', location: '', aiFields: { title: 'alter KI-Titel' }, assist: { updatedAt: '1' }, eventAt: '2026-10-24T09:00', eventAtAuto: true };
+  const theirs = { fileIds: ['a', 'b'], aiFields: { facts: 'KI-Text', title: 'neuer KI-Titel', location: 'Halle 2', eventAt: '2026-10-24T10:00' }, assist: { updatedAt: '2', status: 'done' }, section: 'br' };
+  const m = mergeAssist(mine, theirs);
+  assert.equal(m.facts, 'selbst geschrieben');
+  assert.equal(m.title, 'neuer KI-Titel');
+  assert.equal(m.location, 'Halle 2');
+  assert.equal(m.eventAt, '2026-10-24T10:00');
+  assert.equal(m.section, 'br');
+  assert.deepEqual(m.fileIds, ['a', 'b']);
+  assert.equal(mergeAssist({ ...mine, sectionChosen: true, section: 'incident' }, theirs).section, 'incident');
+  assert.equal(mergeAssist(mine, { ...theirs, assist: { updatedAt: '0' } }).title, 'alter KI-Titel'); // älterer Stand ändert nichts
+  assert.deepEqual(aiSummary({ ...m }), { kept: ['title', 'location', 'eventAt'], edited: ['facts'] });
+});

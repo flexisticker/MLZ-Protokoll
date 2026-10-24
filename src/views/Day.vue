@@ -5,12 +5,12 @@ import { useRoute, useRouter } from 'vue-router';
 import Icon from '../components/Icon.vue';
 import Recorder from '../components/Recorder.vue';
 import { api } from '../services/api.js';
-import { queueEvidence, queueFile, settings, store, toast } from '../services/store.js';
+import { deleteDraft, queueEvidence, queueFile, settings, store, toast } from '../services/store.js';
 import { webSpeech, webSpeechAvailable } from '../services/recorder.js';
 import { dayRow, stampsToDay } from '../services/derived.js';
 import { parseWorkTime } from '../../shared/timeparse.js';
 import { ABSENCE_TYPES, dayResult, fmtDur } from '../../shared/worktime.js';
-import { WEEKDAYS, de, deTime, today } from '../services/util.js';
+import { WEEKDAYS, de, deTime, today, fromB64 } from '../services/util.js';
 import { weekday } from '../../shared/holidays.js';
 
 const route = useRoute();
@@ -35,6 +35,15 @@ function load() {
 onMounted(() => {
   load();
   if (route.query.sprechen) listenHint.value = true;
+  const sg = route.query.vorschlag && fromB64(route.query.vorschlag);
+  if (sg) { // Vorschlag der KI-Ausfüllhilfe
+    if (sg.start || sg.end) f.value.segments = [{ start: sg.start || '', end: sg.end || '' }];
+    f.value.breakMinutes = Number(sg.breakMinutes) || 0;
+    if (sg.orderedBy) Object.assign(f.value.overtime, { orderedBy: sg.orderedBy, how: sg.how || 'angeordnet', reason: sg.reason || '' });
+    f.value.source = 'voice'; f.value.spoken = sg.spoken || ''; f.value.fileId = sg.fileId || '';
+    if (sg.spoken) audio.value = { id: sg.fileId, status: 'done', text: sg.spoken };
+    toast('Vorschlag der KI übernommen – bitte prüfen');
+  }
   if (route.query.text) { // vom Sprechen an einem anderen Tag hierher gewechselt
     f.value.fileId = String(route.query.file || '');
     f.value.source = String(route.query.quelle || 'voice');
@@ -118,6 +127,7 @@ async function save() {
     overtime: overtime.value || f.value.overtime.orderedBy ? f.value.overtime : {},
   };
   await queueEvidence('time', payload, { label: 'Arbeitszeit' });
+  if (route.query.entwurf) await deleteDraft(String(route.query.entwurf));
   toast('Arbeitszeit gespeichert');
   router.push('/zeit');
 }

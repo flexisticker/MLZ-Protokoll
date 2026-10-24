@@ -25,3 +25,6 @@ export const shortHash = (h) => (h ? `${h.slice(0, 8)}…${h.slice(-6)}` : '');
 export const bytes = (n) => (n > 1e6 ? `${(n / 1e6).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1024))} KB`);
 export const minutesBetween = (a, b) => { if (!a || !b) return 0; const [h1, m1] = a.split(':').map(Number); const [h2, m2] = b.split(':').map(Number); let d = h2 * 60 + m2 - (h1 * 60 + m1); if (d < 0) d += 1440; return d; };
 export function debounce(fn, ms) { let t; return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); }; }
+/** Kleine Objekte als URL-Parameter (z. B. Vorschläge der KI-Ausfüllhilfe). */
+export const toB64 = (o) => btoa(unescape(encodeURIComponent(JSON.stringify(o))));
+export const fromB64 = (s) => { try { return JSON.parse(decodeURIComponent(escape(atob(String(s))))); } catch { return null; } };

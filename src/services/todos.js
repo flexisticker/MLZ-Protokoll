@@ -11,7 +11,14 @@ export function todos() {
   const s = settings();
   const d = store.data;
   if (!d) return out;
-  for (const dr of store.drafts) out.push({ level: 'warn', icon: 'edit', text: `Entwurf noch nicht festgeschrieben: ${dr.title || dr.facts?.slice(0, 40) || 'ohne Titel'}`, to: `/diktat/${dr.id}` });
+  for (const dr of store.drafts) {
+    const name = dr.title || dr.facts?.slice(0, 40) || 'ohne Titel';
+    const st = dr.assistWanted ? dr.assist?.status : '';
+    const text = st === 'done' ? `Von der KI ausgefüllt – prüfen und festschreiben: ${name}`
+      : st === 'error' ? `KI-Ausfüllen fehlgeschlagen: ${name}`
+        : ['upload', 'transcribing', 'queued', 'running'].includes(st) ? `Wird gerade ausgefüllt: ${name}` : `Entwurf noch nicht festgeschrieben: ${name}`;
+    out.push({ level: st === 'error' ? 'bad' : 'warn', icon: st === 'done' ? 'check' : 'edit', text, to: `/diktat/${dr.id}` });
+  }
   for (const c of claims()) {
     if (c.claimed) continue;
     const soon = addDays(t, 30);

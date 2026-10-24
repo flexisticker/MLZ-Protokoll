@@ -2,7 +2,7 @@
 import { computed, onMounted, ref } from 'vue';
 import Icon from '../components/Icon.vue';
 import { api } from '../services/api.js';
-import { queueEvidence, settings, store, toast } from '../services/store.js';
+import { loadAssist, queueEvidence, settings, store, toast } from '../services/store.js';
 import { STATES } from '../../shared/holidays.js';
 import { WEEKDAYS, deTime, today } from '../services/util.js';
 
@@ -13,7 +13,40 @@ const op = ref({ ...{ carry: null, adjust: 0 }, ...(s.value.vacation.opening?.[y
 const balH = ref((Number(s.value.balanceStart.minutes) || 0) / 60);
 const smtp = ref({ host: '', port: 465, secure: true, user: '', from: '', pass: '' });
 const testTo = ref('');
-onMounted(async () => { try { smtp.value = { ...smtp.value, ...(await api('/status')).smtp, pass: '' }; testTo.value = s.value.hashMail.to; } catch { /* offline */ } });
+onMounted(async () => {
+  try { smtp.value = { ...smtp.value, ...(await api('/status')).smtp, pass: '' }; testTo.value = s.value.hashMail.to; } catch { /* offline */ }
+  try { const a = await api('/assist/status'); ki.value = { ...ki.value, ...a, claudeKey: '' }; } catch { /* offline */ }
+  ki.value.loaded = true;
+});
+
+// ------------------------------------------------------------ KI-Ausfüllhilfe (Einstellungen auf dem Server, nicht in der Beweiskette)
+const ki = ref({ engine: 'off', ollamaUrl: '', ollamaModel: 'qwen2.5:7b-instruct', claudeKey: '', hasClaudeKey: false, pull: null });
+const kiTest = ref(null);
+let pullTimer;
+async function saveKi(extra = {}) {
+  try {
+    const r = await api('/assist/config', { method: 'PUT', body: { engine: ki.value.engine, ollamaUrl: ki.value.ollamaUrl, ollamaModel: ki.value.ollamaModel, claudeKey: ki.value.claudeKey, ...extra } });
+    ki.value = { ...ki.value, ...r, claudeKey: '' };
+    await loadAssist();
+    toast('KI-Ausfüllhilfe gespeichert');
+  } catch (e) { toast(e.message); }
+}
+async function testKi() {
+  await saveKi();
+  kiTest.value = { busy: true };
+  kiTest.value = await api('/assist/test', { method: 'POST', body: {} }).catch((e) => ({ ok: false, error: e.message }));
+}
+async function pullKi() {
+  await saveKi();
+  ki.value.pull = await api('/assist/pull', { method: 'POST', body: {} });
+  clearInterval(pullTimer);
+  pullTimer = setInterval(async () => {
+    const a = await api('/assist/status').catch(() => null);
+    if (!a) return;
+    ki.value.pull = a.pull;
+    if (!a.pull || a.pull.done || a.pull.error) clearInterval(pullTimer);
+  }, 2000);
+}
 const history = computed(() => (store.data?.settingsHistory || []).slice().reverse().slice(0, 5));
 
 async function save() {
@@ -104,6 +137,47 @@ async function testMail() {
       <label class="check"><input v-model="s.webSpeech" type="checkbox" /> <span><b>Live-Erkennung des Browsers erlauben</b><br /><small class="muted">Schneller, aber der Ton geht dabei an Google bzw. Apple. Für sensible Inhalte die eigene Erkennung (Standard) benutzen.</small></span></label>
     </div>
 
+    <div id="ki" class="card">
+      <h2>KI-Ausfüllhilfe</h2>
+      <p class="muted" style="font-size: .9rem">Du erzählst frei, die KI verteilt das Gesagte auf die Felder (wer, was, wann, wo, Zeugen, Zitate …) und erkennt, ob es um einen Vorfall, BR-Sache, Arbeitszeit oder Urlaub geht. Du prüfst und schreibst fest. Original-Aufnahme, Transkript und der KI-Vorschlag bleiben in der Beweiskette.</p>
+      <p v-if="!ki.loaded" class="muted">Lädt …</p>
+      <template v-else>
+      <label class="f">KI</label>
+      <select v-model="ki.engine">
+        <option value="off">aus</option>
+        <option value="ollama">lokal auf dem Server (Ollama) – empfohlen</option>
+        <option value="claude">Claude (Anthropic, Internet)</option>
+      </select>
+      <template v-if="ki.engine === 'ollama'">
+        <label class="f">Ollama-Adresse<span class="hint">z. B. http://192.168.1.10:11434</span></label>
+        <input v-model="ki.ollamaUrl" placeholder="http://192.168.1.10:11434" inputmode="url" />
+        <label class="f">Modell<span class="hint">qwen2.5:7b-instruct = gute Qualität; qwen2.5:3b-instruct = schneller, ungenauer</span></label>
+        <input v-model="ki.ollamaModel" list="ki-models" />
+        <datalist id="ki-models"><option value="qwen2.5:7b-instruct" /><option value="qwen2.5:3b-instruct" /><option value="qwen2.5:14b-instruct" /><option value="llama3.1:8b" /><option value="gemma2:9b" /></datalist>
+      </template>
+      <template v-if="ki.engine === 'claude'">
+        <div class="alert warn" style="margin-top: 10px">Der erkannte Text (mit Namen von Kolleginnen und Kollegen) wird an Anthropic in den USA gesendet. Für BR-Inhalte und Personaldaten besser die lokale KI benutzen.</div>
+        <label class="f">Claude-API-Schlüssel<span class="hint">{{ ki.hasClaudeKey ? 'gespeichert – leer lassen, um ihn zu behalten' : 'noch nicht gespeichert' }}</span></label>
+        <input v-model="ki.claudeKey" type="password" autocomplete="off" placeholder="sk-ant-…" />
+        <button v-if="ki.hasClaudeKey" class="btn small ghost" @click="saveKi({ removeKey: true })">Schlüssel entfernen</button>
+      </template>
+      <div class="row wrap" style="margin-top: 12px">
+        <button class="btn primary" @click="saveKi()">Speichern</button>
+        <button v-if="ki.engine !== 'off'" class="btn" @click="testKi">Verbindung testen</button>
+        <button v-if="ki.engine === 'ollama'" class="btn" @click="pullKi">Modell laden</button>
+      </div>
+      <p v-if="kiTest && !kiTest.busy" class="alert" :class="kiTest.ok ? (kiTest.hasModel === false ? 'warn' : 'ok') : 'bad'" style="margin-top: 10px">
+        <template v-if="!kiTest.ok">{{ kiTest.error }}</template>
+        <template v-else-if="kiTest.hasModel === false">Ollama erreichbar, aber das Modell {{ ki.ollamaModel }} fehlt noch → „Modell laden“ (ca. 4–5 GB).</template>
+        <template v-else>Verbindung in Ordnung.</template>
+      </p>
+      <p v-if="ki.pull" class="alert" :class="ki.pull.error ? 'bad' : ki.pull.done ? 'ok' : ''" style="margin-top: 10px">
+        <template v-if="ki.pull.error">{{ ki.pull.error }}</template>
+        <template v-else-if="ki.pull.done">Modell {{ ki.pull.model }} ist geladen.</template>
+        <template v-else>Lade {{ ki.pull.model }}: {{ ki.pull.status }} {{ ki.pull.total ? `${Math.round(ki.pull.completed / ki.pull.total * 100)} %` : '' }}</template>
+      </p>
+      </template>
+    </div>
     <div class="card">
       <h2>Tägliche Prüfwert-Mail</h2>
       <p class="muted" style="font-size: .9rem">Schickt jede Nacht den Prüfwert der Kette an deine private Adresse – ein zusätzlicher, unabhängiger Nachweis.</p>

@@ -4,6 +4,8 @@ Selbst gehostete App (Docker auf Unraid, Bedienung am Handy) für:
 
 - **Logbuch per Sprache:** Auffälligkeiten im Beruf und Betriebsratsangelegenheiten diktieren, lokale Spracherkennung
   (whisper.cpp im Container, Modelle der Video-Zentrale mitbenutzt, keine Cloud), Fotos und Anlagen, Leitfragen (wer, was, wann, wo, Zeugen, Zitate), Tatsachen getrennt von Bewertungen.
+- **KI-Ausfüllhilfe:** frei erzählen – eine lokale KI (Ollama, optional Claude) erkennt Vorfall / BR-Sache / Arbeitszeit / Urlaub
+  und füllt das passende Formular aus; KI-Felder sind markiert, festgeschrieben wird erst nach Prüfung, der Vorschlag bleibt in der Beweiskette.
 - **Arbeitszeit:** Stempeln (Beginn/Pause/Feierabend) oder per Sprache („halb acht angefangen, 30 Minuten Pause, bis 16 Uhr“),
   Pausenregeln (§ 4 ArbZG), Soll/Ist/Saldo, Feiertage je Bundesland, halbe freie Tage (24.12./31.12.) mit Grundlage,
   Mehrarbeit mit „angeordnet/gebilligt/geduldet von“, Ausschlussfristen und Geltendmachung.
@@ -26,7 +28,7 @@ Beweisführung: [`docs/BEWEISFUEHRUNG.md`](docs/BEWEISFUEHRUNG.md)
 ```
 npm install
 npm test                                  # Feiertage, Sprach-Parser, Arbeitszeitlogik
-node test/mock-services.mjs &             # Zeitstempel-Attrappe (8098)
+node test/mock-services.mjs &             # Zeitstempel (8098), Ollama (8097), Claude (8096) als Attrappen
 mkdir -p data/whisper && touch data/whisper/ggml-small.bin   # Platzhalter-Modell für die Attrappe
 npx vite build
 DATA_DIR=./data WHISPER_BIN=$PWD/test/fake-whisper.sh TSA_URLS=http://127.0.0.1:8098/tsr \
