@@ -1,0 +1,26 @@
+# Nur als Referenz (Unraid: zwei Vorlagen im Ordner unraid/ – siehe docs/INSTALLATION-UNRAID.md)
+services:
+  mlz-protokoll:
+    image: ghcr.io/flexisticker/mlz-protokoll:latest
+    container_name: mlz-protokoll
+    restart: unless-stopped
+    ports: ["8094:8090"]
+    environment:
+      - TZ=Europe/Berlin
+      - WHISPER_URL=http://speaches:8000
+    volumes:
+      - /mnt/user/appdata/mlz-protokoll:/data
+    depends_on: [speaches]
+  speaches:
+    image: ghcr.io/speaches-ai/speaches:latest-cpu
+    container_name: speaches
+    restart: unless-stopped
+    # kein Port nach außen – nur die App spricht mit der Spracherkennung
+    environment:
+      - WHISPER__COMPUTE_TYPE=int8
+      - WHISPER__INFERENCE_DEVICE=cpu
+    volumes:
+      - /mnt/user/appdata/speaches:/home/ubuntu/.cache/huggingface/hub
+networks:
+  default:
+    name: mlz-net

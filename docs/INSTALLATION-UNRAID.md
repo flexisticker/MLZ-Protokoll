@@ -1,0 +1,97 @@
+# MLZ-Protokoll auf Unraid installieren
+
+Zwei Container laufen in einem eigenen Docker-Netz `mlz-net`:
+
+| Container | Aufgabe | Port |
+|---|---|---|
+| `mlz-protokoll` | App (Oberfläche, Datenbank, Beweiskette) | 8094 → 8090 |
+| `speaches` | lokale Spracherkennung (Whisper) | **keiner** – nur intern |
+
+## 1. Paket-Zugang (falls das Repository privat ist)
+
+Wie bei Flex-Studio: Unraid meldet sich mit einem GitHub-Token (`read:packages`) bei `ghcr.io` an.
+Den vorhandenen Token weiterverwenden – er gilt für alle Pakete von `flexisticker`.
+
+## 2. Netz anlegen (einmalig)
+
+Unraid → Terminal (oben rechts `>_`):
+
+```
+docker network create mlz-net
+```
+
+## 3. Spracherkennung (speaches)
+
+1. Datei `unraid/speaches.xml` nach `/boot/config/plugins/dockerMan/templates-user/my-speaches.xml` kopieren
+   (oder in Unraid „Add Container“ von Hand ausfüllen: Repository `ghcr.io/speaches-ai/speaches:latest-cpu`,
+   Network Type `mlz-net`, Pfad `/mnt/user/appdata/speaches` → `/home/ubuntu/.cache/huggingface/hub`).
+2. Docker → „Add Container“ → Vorlage `speaches` wählen → Apply.
+3. **Kein Port** freigeben.
+
+Beim ersten Start lädt MLZ-Protokoll die Modelle herunter (ca. 0,5 GB + 1,6 GB, dauert einige Minuten).
+Status: in der App unter **Mehr → Prüfung & Zeitstempel → Spracherkennung**.
+
+Hinweis: Der Pfad für den Modell-Zwischenspeicher kann je nach speaches-Version abweichen. Werden die Modelle nach
+jedem Neustart neu geladen, in der speaches-Dokumentation nachsehen, wo `HF_HOME` liegt, und den Pfad anpassen.
+
+## 4. MLZ-Protokoll
+
+1. `unraid/mlz-protokoll.xml` nach `/boot/config/plugins/dockerMan/templates-user/my-mlz-protokoll.xml` kopieren.
+2. Docker → „Add Container“ → Vorlage `mlz-protokoll` → Apply.
+   - Network Type: `mlz-net`
+   - Port: `8094` (frei wählbar)
+   - Daten: `/mnt/user/appdata/mlz-protokoll`
+3. Test im Heimnetz: `http://192.168.1.10:8094` → Einrichten (Name, Benutzername, Passwort).
+
+## 5. HTTPS über Nginx Proxy Manager (nötig für Mikrofon, Kamera, Passkey)
+
+Wie bei `studio.flexisticker.de`:
+
+1. DNS: A-Eintrag z. B. `protokoll.flexisticker.de` → feste IP (für das Let's-Encrypt-Zertifikat),
+   lokaler UniFi-DNS-Eintrag `protokoll` → 192.168.1.111.
+2. NPM → Proxy Host: Domain `protokoll.flexisticker.de`, Forward `http://192.168.1.10:8094`,
+   **Websockets an**, Access List **„Nur Heimnetz“**, SSL: Let's Encrypt, Force SSL, HTTP/2.
+3. Unter „Advanced“ für große Sprachaufnahmen/Fotos:
+   ```
+   client_max_body_size 200m;
+   proxy_read_timeout 300s;
+   ```
+4. Am Handy `https://protokoll.flexisticker.de` öffnen → Chrome-Menü → **„App installieren“** bzw. „Zum Startbildschirm“.
+
+**Von unterwegs:** nicht öffentlich freigeben, sondern über VPN (UniFi WireGuard/Teleport) ins Heimnetz.
+Ohne Netz nimmt die App trotzdem auf – Aufnahmen und Einträge bleiben auf dem Handy und werden gesendet,
+sobald wieder eine Verbindung besteht (oben erscheint dann „offline“ und die Anzahl wartender Einträge).
+
+## 6. Nach der Einrichtung in der App
+
+1. **Mehr → Anmeldung & Sicherheit:** Fingerabdruck (Passkey) hinzufügen, Zwei-Faktor einschalten,
+   **Wiederherstellungscodes ausdrucken**.
+2. **Mehr → Einstellungen:** Name, Arbeitgeber, Soll-Stunden, Urlaubstage, Grundlage für 24.12./31.12., Ausschlussfrist,
+   Namen/Fachwörter für die Spracherkennung. Optional: tägliche Prüfwert-Mail (Gmail mit App-Passwort).
+3. **Sicherung** nach Google Drive einrichten: `docs/SICHERUNG-GOOGLE-DRIVE.md`.
+
+## 7. Updates
+
+Docker → „Check for Updates“ → „apply update“ (Daten bleiben erhalten). Die Beweiskette wird beim Update nicht verändert.
+
+## 8. Notfall: Passwort vergessen / Handy mit Authenticator verloren
+
+1. Wiederherstellungscode beim Anmelden statt des 6-stelligen Codes eingeben, oder
+2. Unraid → Docker → `mlz-protokoll` → Konsole:
+   ```
+   node server/reset-login.js            # zeigt den Benutzernamen
+   node server/reset-login.js michael    # Einmal-Passwort, Zwei-Faktor aus
+   ```
+   Danach anmelden, neues Passwort vergeben, Zwei-Faktor wieder einschalten.
+   Bei Sperre nach Fehlversuchen: Container neu starten (die Sperre liegt nur im Speicher).
+
+## Datenordner
+
+```
+/mnt/user/appdata/mlz-protokoll/
+  mlz.sqlite          Datenbank (Beweiskette, Einstellungen, Anmeldung)
+  dateien/JJJJ/       Original-Sprachaufnahmen und Fotos (schreibgeschützt)
+  zeitstempel/        RFC-3161-Zeitstempel (.tsr)
+  sicherungen/        tägliche Datenbanksicherungen (30 Tage)
+  arbeit/             Arbeitskopien (können gelöscht werden)
+```

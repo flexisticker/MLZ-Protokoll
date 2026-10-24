@@ -1,0 +1,20 @@
+<?xml version="1.0"?>
+<Container version="2">
+  <Name>mlz-protokoll</Name>
+  <Repository>ghcr.io/flexisticker/mlz-protokoll:latest</Repository>
+  <Registry>https://github.com/flexisticker/MLZ-Protokoll/pkgs/container/mlz-protokoll</Registry>
+  <Network>mlz-net</Network>
+  <Shell>bash</Shell>
+  <Privileged>false</Privileged>
+  <Overview>MLZ-Protokoll: Logbuch per Sprache, Arbeitszeit, Urlaub und BR-Tätigkeit mit fälschungssicherer Beweiskette (SHA-256, RFC-3161-Zeitstempel).</Overview>
+  <Category>Productivity:</Category>
+  <WebUI>http://[IP]:[PORT:8090]/</WebUI>
+  <Icon>https://raw.githubusercontent.com/flexisticker/MLZ-Protokoll/main/public/icon-192.png</Icon>
+  <Config Name="Web-Port" Target="8090" Default="8094" Mode="tcp" Description="Port im Heimnetz (Nginx Proxy Manager zeigt hierauf)" Type="Port" Display="always" Required="true">8094</Config>
+  <Config Name="Daten" Target="/data" Default="/mnt/user/appdata/mlz-protokoll" Mode="rw" Description="Datenbank, Originaldateien, Zeitstempel, Sicherungen" Type="Path" Display="always" Required="true">/mnt/user/appdata/mlz-protokoll</Config>
+  <Config Name="Zeitzone" Target="TZ" Default="Europe/Berlin" Mode="" Description="" Type="Variable" Display="advanced" Required="true">Europe/Berlin</Config>
+  <Config Name="Spracherkennung" Target="WHISPER_URL" Default="http://speaches:8000" Mode="" Description="Adresse des speaches-Containers im Netz mlz-net" Type="Variable" Display="advanced" Required="true">http://speaches:8000</Config>
+  <Config Name="Modell" Target="WHISPER_MODEL" Default="deepdml/faster-whisper-large-v3-turbo-ct2" Mode="" Description="Genaues Modell für Diktate" Type="Variable" Display="advanced" Required="false">deepdml/faster-whisper-large-v3-turbo-ct2</Config>
+  <Config Name="Modell schnell" Target="WHISPER_MODEL_FAST" Default="Systran/faster-whisper-small" Mode="" Description="Schnelles Modell für Arbeitszeit-Sätze" Type="Variable" Display="advanced" Required="false">Systran/faster-whisper-small</Config>
+  <Config Name="Zeitstempeldienste" Target="TSA_URLS" Default="https://freetsa.org/tsr,http://timestamp.digicert.com" Mode="" Description="RFC-3161-Dienste, durch Komma getrennt" Type="Variable" Display="advanced" Required="false">https://freetsa.org/tsr,http://timestamp.digicert.com</Config>
+</Container>

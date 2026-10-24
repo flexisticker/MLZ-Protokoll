@@ -1,0 +1,12 @@
+<?xml version="1.0"?>
+<Container version="2">
+  <Name>speaches</Name>
+  <Repository>ghcr.io/speaches-ai/speaches:latest-cpu</Repository>
+  <Network>mlz-net</Network>
+  <Privileged>false</Privileged>
+  <Overview>Lokale Spracherkennung (Whisper) für MLZ-Protokoll. Kein Port nach außen nötig.</Overview>
+  <Category>Tools:</Category>
+  <Config Name="Modelle" Target="/home/ubuntu/.cache/huggingface/hub" Default="/mnt/user/appdata/speaches" Mode="rw" Description="Heruntergeladene Modelle (ca. 2 GB)" Type="Path" Display="always" Required="true">/mnt/user/appdata/speaches</Config>
+  <Config Name="Rechenart" Target="WHISPER__COMPUTE_TYPE" Default="int8" Mode="" Description="" Type="Variable" Display="advanced" Required="true">int8</Config>
+  <Config Name="Gerät" Target="WHISPER__INFERENCE_DEVICE" Default="cpu" Mode="" Description="" Type="Variable" Display="advanced" Required="true">cpu</Config>
+</Container>
