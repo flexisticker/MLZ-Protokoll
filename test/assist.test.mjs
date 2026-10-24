@@ -49,3 +49,11 @@ test('Korrektur ohne Datum lässt den Tag stehen', async () => {
   assert.equal(parseWorkTime('gestern bis 17 Uhr', '2026-10-24').dateGiven, true);
   assert.equal(parseWorkTime('heute bis 17 Uhr', '2026-10-24').dateGiven, true);
 });
+
+test('Zeitpunkt ohne KI aus dem Text: Ende nur bei „von … bis …“', async () => {
+  const { extractWhen, titleFrom } = await import('../shared/assist.js');
+  assert.deepEqual(extractWhen('Heute um zehn hat er mich angeschrien, ich soll bis 19 Uhr bleiben.', '2026-10-24'), { date: '2026-10-24', time: '10:00', end: '' });
+  assert.deepEqual(extractWhen('Gestern von 14 bis halb drei war die Sitzung.', '2026-10-24'), { date: '2026-10-23', time: '14:00', end: '14:30' });
+  assert.deepEqual(extractWhen('Der Chef war unfreundlich.', '2026-10-24'), { date: '', time: '', end: '' });
+  assert.equal(titleFrom('Der Chef war heute sehr unfreundlich zu mir und den anderen. Danach …'), 'Der Chef war heute sehr unfreundlich zu …');
+});

@@ -59,7 +59,7 @@ Eigenständiges Projekt (nicht Teil von Flex-Studio). **Keine Passwörter, Token
   192.168.3.0/24 in der Access List. Details `docs/INSTALLATION-UNRAID.md` Abschnitt 5.
 
 ## Testen
-- `npm test` (18 Tests), `node test/mock-services.mjs` (Zeitstempeldienst :8098 mit eigener CA in `test/.tsa/`, Ollama-Attrappe :8097,
+- `npm test` (19 Tests), `node test/mock-services.mjs` (Zeitstempeldienst :8098 mit eigener CA in `test/.tsa/`, Ollama-Attrappe :8097,
   Claude-Attrappe :8096 mit `CLAUDE_BASE_URL=http://127.0.0.1:8096`, Schlüssel `sk-ant-test`), Spracherkennung per
   `WHISPER_BIN=$PWD/test/fake-whisper.sh` (Text über `FAKE_WHISPER_TEXT_FILE`; braucht eine – auch leere – Modelldatei `ggml-small.bin` in `MODEL_DIR` oder `DATA_DIR/whisper`),
   Server mit `TSA_URLS=http://127.0.0.1:8098/tsr TSA_CA_FILE=$PWD/test/.tsa/ca.crt WHISPER_PRELOAD=off`.
@@ -89,6 +89,11 @@ Eigenständiges Projekt (nicht Teil von Flex-Studio). **Keine Passwörter, Token
   Prompt: spätere Aussage gilt, alle Felder füllen; Arbeitszeit: Regel-Parser je Aufnahme der Reihe nach, spätere Angabe ersetzt
   (`parseWorkTime(...).dateGiven` – Korrektur ohne Datum bleibt beim Tag, auch im Formular „Korrektur sprechen“). Nach dem Festschreiben
   bleibt die Korrektur ein (gesprochener) Nachtrag.
+- **1.4.0 (24.10.2026):** Zeitpunkte. Prompt mit ausgefülltem Beispiel (Few-Shot), damit auch Qwen 7B alle Felder füllt. Findet die KI keinen
+  Zeitpunkt, liest `extractWhen` (shared/assist.js, auf Basis `parseWorkTime`; Ende nur bei „von … bis …“) ihn aus dem Text; ohne KI setzt
+  der Browser so „Wann?“, „bis“ und einen Kurztitel (`titleFrom`, erster Satz) – markiert „aus Text“ (`autoFields`), KI-Felder „KI“.
+  Entwurf zeigt unter „Wann?“ Aufnahmezeit (Handy, erste Anlage `capturedAt`), Eingang beim Server und Abstand zum Geschehen;
+  „Grund für spätere Erfassung“ richtet sich jetzt nach der Aufnahmezeit. Eintragsseite: Geschehen / aufgenommen / festgeschrieben, Logbuch: „erfasst …“.
 
 ## Offene Punkte / Ideen
 - Nach der Installation: Erkennungsdauer auf dem Xeon messen; bei guter Zeit Diktat-Modell auf `large-v3-turbo-q5_0` stellen.

@@ -8,10 +8,10 @@ import FileItem from '../components/FileItem.vue';
 import Modal from '../components/Modal.vue';
 import { deleteDraft, draftHasContent, finalizeDraft, newDraft, queueEvidence, queueFile, saveDraft, settings, store, toast } from '../services/store.js';
 import { api } from '../services/api.js';
-import { KINDS, mergeAssist } from '../../shared/assist.js';
+import { KINDS, extractWhen, mergeAssist, titleFrom } from '../../shared/assist.js';
 import { webSpeech, webSpeechAvailable } from '../services/recorder.js';
 import { CATEGORIES } from '../services/categories.js';
-import { debounce, localNow, uuid, toB64 } from '../services/util.js';
+import { debounce, deTime, localNow, uuid, toB64 } from '../services/util.js';
 
 const route = useRoute();
 const router = useRouter();
@@ -47,7 +47,14 @@ onBeforeUnmount(() => {
 const assistOn = computed(() => store.assist?.engine && store.assist.engine !== 'off');
 const st = computed(() => d.value?.assist?.status || '');
 const waiting = computed(() => d.value?.assistWanted && ['upload', 'transcribing', 'queued', 'running'].includes(st.value));
-const ai = (f) => !!d.value?.[f] && d.value.aiFields?.[f] === d.value[f];
+// Markierung: Feld stammt unverändert von der KI bzw. aus der Regel-Erkennung („aus Text“)
+const mark = (f) => {
+  const v = d.value?.[f];
+  if (!v) return '';
+  if (d.value.aiFields?.[f] === v) return 'KI';
+  if (d.value.autoFields?.[f] === v) return 'aus Text';
+  return '';
+};
 let poll = setInterval(async () => {
   if (!d.value?.assistWanted || !['upload', 'transcribing', 'queued', 'running', ''].includes(st.value) || !store.online) return;
   try {
@@ -81,7 +88,20 @@ function keepAsEntry() {
 }
 
 const cats = computed(() => CATEGORIES[d.value?.section] || []);
-const late = computed(() => d.value && d.value.eventAt && (Date.now() - new Date(d.value.eventAt).getTime()) > 36 * 3600e3);
+// Zeitpunkte: Geschehen (Angabe) ↔ Aufnahme am Handy ↔ Eingang beim Server (beide automatisch, unveränderbar)
+const firstAudio = computed(() => (d.value?.fileIds || []).map((f) => ({ id: f, ...(d.value.files?.[f] || {}) })).filter((f) => f.capturedAt)
+  .sort((a, b) => String(a.capturedAt).localeCompare(String(b.capturedAt)))[0] || null);
+const captured = computed(() => firstAudio.value?.capturedAt || '');
+const received = computed(() => (firstAudio.value && store.data?.files?.[firstAudio.value.id]?.receivedAt) || '');
+const gapText = computed(() => {
+  if (!d.value?.eventAt || !captured.value) return '';
+  const min = Math.round((new Date(captured.value) - new Date(d.value.eventAt)) / 60000);
+  if (min < 0) return 'Geschehen liegt nach der Aufnahme – bitte Zeitpunkt prüfen';
+  if (min < 60) return `${min} Min. nach dem Geschehen aufgenommen`;
+  if (min < 48 * 60) return `${Math.round(min / 60)} Std. nach dem Geschehen aufgenommen`;
+  return `${Math.round(min / 1440)} Tage nach dem Geschehen aufgenommen`;
+});
+const late = computed(() => d.value && d.value.eventAt && ((captured.value ? new Date(captured.value) : Date.now()) - new Date(d.value.eventAt).getTime()) > 36 * 3600e3);
 const cases = computed(() => Object.values(store.data?.cases || {}).filter((c) => !c.closed));
 
 async function recorded({ blob, startedAt, durationSec }) {
@@ -107,7 +127,17 @@ function onTranscript(fid, text, force = false) {
   if (!force && d.value.assistWanted && st.value !== 'off') return; // die KI füllt die Felder aus
   d.value.applied.push(fid);
   d.value.facts = d.value.facts.trim() ? `${d.value.facts.trim()}\n\n${text}` : text;
-  toast('Erkannter Text in „Was ist passiert?“ übernommen – bitte prüfen');
+  // ohne KI: Zeitpunkt und Kurztitel mit festen Regeln aus dem Text lesen
+  const auto = { ...(d.value.autoFields || {}) };
+  const w = extractWhen(text, localNow().slice(0, 10));
+  if ((w.time || w.date) && (d.value.eventAtAuto || d.value.eventAt === auto.eventAt)) {
+    d.value.eventAt = `${w.date || (d.value.eventAt || localNow()).slice(0, 10)}T${w.time || (d.value.eventAt || localNow()).slice(11, 16)}`;
+    auto.eventAt = d.value.eventAt; d.value.eventAtAuto = false;
+  }
+  if (w.end && (!d.value.eventEnd || d.value.eventEnd === auto.eventEnd)) { d.value.eventEnd = w.end; auto.eventEnd = w.end; }
+  if (!d.value.title) { d.value.title = titleFrom(text); auto.title = d.value.title; }
+  d.value.autoFields = auto;
+  toast('Erkannter Text übernommen – Zeitpunkt und Titel bitte prüfen');
 }
 function removeFile(fid) {
   d.value.fileIds = d.value.fileIds.filter((x) => x !== fid);
@@ -196,40 +226,46 @@ const setNow = () => { d.value.eventAt = localNow(); d.value.eventAtAuto = false
     <FileItem v-for="fid in d.fileIds" :id="fid" :key="fid" :meta="d.files[fid]" removable @remove="removeFile(fid)" @transcript="onTranscript(fid, $event)" />
 
     <div class="card">
-      <h3>Wann? <span v-if="ai('eventAt')" class="badge ai">KI</span></h3>
+      <h3>Wann? <span v-if="mark('eventAt')" class="badge ai">{{ mark('eventAt') }}</span></h3>
       <div class="row">
         <input v-model="d.eventAt" type="datetime-local" class="grow" @input="d.eventAtAuto = false" />
         <button class="btn small" type="button" @click="setNow">Jetzt</button>
       </div>
-      <label class="f">bis (Uhrzeit, optional)</label>
+      <div v-if="captured" class="muted" style="font-size: .85rem; margin-top: 8px; line-height: 1.5">
+        🎙 aufgenommen am Handy: <b>{{ deTime(captured) }}</b><br />
+        🖥 beim Server eingegangen: <b>{{ received ? deTime(received) : 'noch nicht (wird gesendet)' }}</b><br />
+        <span :class="gapText.startsWith('Geschehen') ? 'neg' : ''">{{ gapText }}</span>
+        <small style="display: block">Diese Zeiten setzt die App automatisch und unveränderbar.</small>
+      </div>
+      <label class="f">bis (Uhrzeit, optional) <span v-if="mark('eventEnd')" class="badge ai">{{ mark('eventEnd') }}</span></label>
       <input v-model="d.eventEnd" type="time" />
       <template v-if="late">
         <label class="f">Warum erst jetzt erfasst?<span class="hint">Liegt das Geschehen länger zurück, das offen angeben (z. B. „erst abends Zeit“).</span></label>
         <input v-model="d.delayReason" />
       </template>
 
-      <label class="f">Kurztitel <span v-if="ai('title')" class="badge ai">KI</span></label>
+      <label class="f">Kurztitel <span v-if="mark('title')" class="badge ai">{{ mark('title') }}</span></label>
       <input v-model="d.title" placeholder="z. B. Anweisung Mehrarbeit ohne Ankündigung" />
-      <label class="f">Art <span v-if="ai('category')" class="badge ai">KI</span></label>
+      <label class="f">Art <span v-if="mark('category')" class="badge ai">{{ mark('category') }}</span></label>
       <select v-model="d.category"><option value="">– wählen –</option><option v-for="c in cats" :key="c">{{ c }}</option></select>
-      <label class="f">Wo? <span v-if="ai('location')" class="badge ai">KI</span></label>
+      <label class="f">Wo? <span v-if="mark('location')" class="badge ai">{{ mark('location') }}</span></label>
       <input v-model="d.location" placeholder="Ort, Abteilung, Raum, Telefon, Mail …" />
     </div>
 
     <div class="card">
-      <h3>Was ist passiert? <small>(nur Tatsachen)</small> <span v-if="ai('facts')" class="badge ai">KI</span></h3>
+      <h3>Was ist passiert? <small>(nur Tatsachen)</small> <span v-if="mark('facts')" class="badge ai">{{ mark('facts') }}</span></h3>
       <textarea v-model="d.facts" rows="7" placeholder="Wer hat was getan oder gesagt? Reihenfolge, Uhrzeiten, Umstände. Keine Bewertungen – die kommen unten." />
-      <label class="f">Wörtliche Äußerungen <span v-if="ai('quotes')" class="badge ai">KI</span><span class="hint">möglichst genau, in Anführungszeichen, mit wer hat es gesagt</span></label>
+      <label class="f">Wörtliche Äußerungen <span v-if="mark('quotes')" class="badge ai">{{ mark('quotes') }}</span><span class="hint">möglichst genau, in Anführungszeichen, mit wer hat es gesagt</span></label>
       <textarea v-model="d.quotes" rows="3" placeholder="Herr X: „…“" />
-      <label class="f">Beteiligte Personen <span v-if="ai('persons')" class="badge ai">KI</span><span class="hint">Name und Funktion – nur so viel wie nötig</span></label>
+      <label class="f">Beteiligte Personen <span v-if="mark('persons')" class="badge ai">{{ mark('persons') }}</span><span class="hint">Name und Funktion – nur so viel wie nötig</span></label>
       <input v-model="d.persons" />
-      <label class="f">Zeugen / wer war dabei? <span v-if="ai('witnesses')" class="badge ai">KI</span></label>
+      <label class="f">Zeugen / wer war dabei? <span v-if="mark('witnesses')" class="badge ai">{{ mark('witnesses') }}</span></label>
       <input v-model="d.witnesses" />
-      <label class="f">Folgen <span v-if="ai('consequences')" class="badge ai">KI</span><span class="hint">für Arbeit, Arbeitszeit, Gesundheit, BR-Arbeit</span></label>
+      <label class="f">Folgen <span v-if="mark('consequences')" class="badge ai">{{ mark('consequences') }}</span><span class="hint">für Arbeit, Arbeitszeit, Gesundheit, BR-Arbeit</span></label>
       <textarea v-model="d.consequences" rows="2" />
-      <label class="f">Meine Reaktion / Meldung <span v-if="ai('reaction')" class="badge ai">KI</span><span class="hint">was ich gesagt/getan habe, wem gemeldet (wann, wie)</span></label>
+      <label class="f">Meine Reaktion / Meldung <span v-if="mark('reaction')" class="badge ai">{{ mark('reaction') }}</span><span class="hint">was ich gesagt/getan habe, wem gemeldet (wann, wie)</span></label>
       <textarea v-model="d.reaction" rows="2" />
-      <label class="f">Meine Bewertung <span v-if="ai('assessment')" class="badge ai">KI</span><span class="hint">getrennt von den Tatsachen – wie habe ich es empfunden?</span></label>
+      <label class="f">Meine Bewertung <span v-if="mark('assessment')" class="badge ai">{{ mark('assessment') }}</span><span class="hint">getrennt von den Tatsachen – wie habe ich es empfunden?</span></label>
       <textarea v-model="d.assessment" rows="2" />
     </div>
 

@@ -6,6 +6,8 @@ export const ENTRY_FIELDS = ['title', 'category', 'eventAt', 'eventEnd', 'locati
 export const KINDS = { incident: 'Auffälligkeit', br: 'Betriebsrat', time: 'Arbeitszeit', absence: 'Urlaub / Abwesenheit', brtime: 'BR-Zeit' };
 export const ABSENCE_KEYS = ['urlaub', 'krank', 'kindkrank', 'schulung', 'brcomp', 'sonder', 'abbau', 'unbezahlt'];
 
+import { normalize as normalize_, parseWorkTime } from './timeparse.js';
+
 const str = { type: 'string' };
 const obj = (properties) => ({ type: 'object', properties, required: Object.keys(properties), additionalProperties: false });
 
@@ -45,6 +47,19 @@ export function systemPrompt(categories) {
     '- Nur das Objekt zur gewählten Art ausfüllen ("time", "absence" oder "brtime"); die anderen mit leeren Werten (Zahl 0, false).',
     '- "time.how": angeordnet | gebilligt | geduldet | notwendig oder "". "time.breakMinutes": Pause in Minuten, 0 wenn nicht genannt.',
     '- "missing": höchstens 4 kurze Fragen nach wichtigen fehlenden Angaben (z. B. „Wer war dabei?“, „Um wie viel Uhr?“). Keine Fragen nach Unwichtigem.',
+    '',
+    'BEISPIEL (heute ist Dienstag, der 2026-03-10):',
+    'Notiz: "Heute so gegen zehn, viertel nach zehn hat mich der Maier, also mein Abteilungsleiter, in der Halle 2 vor dem Kollegen Becker angeschrien:',
+    'Das ist nicht verhandelbar, du bleibst heute bis 19 Uhr. Ich hab gesagt, dass ich das dem Betriebsrat melde. Ging bis ungefähr halb elf.',
+    'Ich war danach total fertig und hab Kopfweh bekommen. Ich finde das einfach respektlos."',
+    'Antwort (nur die Logbuch-Felder gezeigt): {"kind":"incident","title":"Anschreien und Anordnung Überstunden in Halle 2",',
+    '"category":"Anweisung / Druck","eventDate":"2026-03-10","eventTime":"10:15","eventEnd":"10:30","location":"Halle 2",',
+    '"persons":"Herr Maier (Abteilungsleiter)","witnesses":"Herr Becker (Kollege)",',
+    '"facts":"Herr Maier sprach mich gegen 10:15 Uhr in Halle 2 in lautem Ton an und wies mich an, heute bis 19 Uhr zu bleiben. Ich antwortete, dass ich das dem Betriebsrat melde. Das Gespräch dauerte bis etwa 10:30 Uhr.",',
+    '"quotes":"Herr Maier: „Das ist nicht verhandelbar, du bleibst heute bis 19 Uhr.“","consequences":"Danach Kopfschmerzen und Erschöpfung; Anweisung, bis 19 Uhr zu arbeiten.",',
+    '"reaction":"Ich habe angekündigt, den Vorfall dem Betriebsrat zu melden.","assessment":"Ich empfinde das Verhalten als respektlos.",',
+    '"missing":["Wurde die Mehrarbeit schriftlich angeordnet?"]}',
+    '',
     `Arten für Auffälligkeiten: ${categories.incident.join('; ')}.`,
     `Arten für Betriebsrat: ${categories.br.join('; ')}.`,
   ].join('\n');
@@ -67,6 +82,23 @@ export function userPrompt(text, now, extra = '') {
     String(text || '').trim(),
     '"""',
   ].filter(Boolean).join('\n');
+}
+
+/**
+ * Zeitpunkt und Kurztitel ohne KI aus dem Text lesen (feste Regeln, wie bei der Arbeitszeit).
+ * Ende nur bei „von … bis …“ – ein „bis 19 Uhr bleiben“ ist kein Ende des Geschehens.
+ */
+export function extractWhen(text, today) {
+  const p = parseWorkTime(text, today);
+  const norm = normalize_(text);
+  const range = /\bvon\b[^.]{0,40}\bbis\b/.test(norm);
+  const time = p.start || '';
+  return { date: p.dateGiven ? p.date : '', time, end: range && p.start && p.end ? p.end : '' };
+}
+export function titleFrom(text) {
+  const first = String(text || '').trim().split(/(?<=[.!?])\s+/)[0] || '';
+  const words = first.replace(/[.!?]+$/, '').split(/\s+/).filter(Boolean);
+  return words.length ? `${words.slice(0, 8).join(' ')}${words.length > 8 ? ' …' : ''}` : '';
 }
 
 const DATE = /^\d{4}-\d\d-\d\d$/;

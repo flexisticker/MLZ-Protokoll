@@ -6,7 +6,7 @@ import { db, kvGet, kvSet } from './db.js';
 import { append, getRow, parsePayload } from './evidence.js';
 import { transcriptOf } from './transcribe.js';
 import { CATEGORIES } from '../shared/categories.js';
-import { ENTRY_FIELDS, SCHEMA, combineSpoken, normalize, systemPrompt, userPrompt } from '../shared/assist.js';
+import { ENTRY_FIELDS, SCHEMA, combineSpoken, extractWhen, normalize, systemPrompt, userPrompt } from '../shared/assist.js';
 import { parseWorkTime } from '../shared/timeparse.js';
 
 const CLAUDE_MODEL = 'claude-opus-5-5';
@@ -198,6 +198,12 @@ async function runFor(id) {
   const t0 = Date.now();
   const out = c.engine === 'claude' ? await runClaude(spoken, now) : await runOllama(spoken, now);
   const n = normalize(out.result, now);
+  // Zeitpunkt nicht erkannt? Feste Regeln (letzte Aufnahme mit Zeitangabe gewinnt)
+  if ((n.kind === 'incident' || n.kind === 'br') && !n.fields.eventAt) {
+    let w = null;
+    for (const t of texts.filter(Boolean)) { const x = extractWhen(t, now.slice(0, 10)); if (x.time || x.date) w = x; }
+    if (w) { n.fields.eventAt = `${w.date || now.slice(0, 10)}T${w.time || now.slice(11, 16)}`; if (w.end && !n.fields.eventEnd) n.fields.eventEnd = w.end; }
+  }
   // Arbeitszeit: feste Regeln für Uhrzeiten sind zuverlässiger als die KI
   // Mehrere Aufnahmen der Reihe nach auswerten: eine spätere Angabe (Korrektur) ersetzt die frühere.
   if (n.kind === 'time') {

@@ -44,6 +44,9 @@ async function saveRetract() {
   await queueEvidence('retract', { reason: retract.value }, { ref: e.value.id, label: 'Zurückziehen' });
   retract.value = null;
 }
+// erste Sprachaufnahme bzw. Anlage = wann es festgehalten wurde (Uhr des Handys)
+const recordedAt = computed(() => (e.value?.fileIds || []).map((f) => store.data?.files?.[f]).filter((f) => f?.capturedAt)
+  .map((f) => f.capturedAt).sort()[0] || '');
 const caseTitle = computed(() => e.value?.caseId && store.data.cases[e.value.caseId]?.title);
 </script>
 
@@ -61,6 +64,11 @@ const caseTitle = computed(() => e.value?.caseId && store.data.cases[e.value.cas
         <span v-if="caseTitle" class="badge">{{ caseTitle }}</span>
         <h1 style="margin-top: 8px">{{ e.title || 'Eintrag' }}</h1>
         <p><b>{{ deLocal(e.eventAt) }}<template v-if="e.eventEnd"> – {{ e.eventEnd }}</template></b><template v-if="e.location"> · {{ e.location }}</template></p>
+        <div class="muted" style="font-size: .85rem; line-height: 1.5; margin-bottom: 8px">
+          Geschehen: <b>{{ deLocal(e.eventAt) }}<template v-if="e.eventEnd">–{{ e.eventEnd }}</template></b><br />
+          <template v-if="recordedAt">Aufgenommen am Handy: <b>{{ deTime(recordedAt) }}</b><br /></template>
+          Festgeschrieben (Server): <b>{{ deTime(e.receivedAt) }}</b>
+        </div>
         <div v-if="e.retracted" class="alert warn">Zurückgezogen am {{ deTime(e.retracted.receivedAt) }}: {{ e.retracted.reason }}</div>
         <h3>Was ist passiert?</h3><p class="pre">{{ e.facts }}</p>
         <template v-if="e.quotes"><h3>Wörtliche Äußerungen</h3><p class="quote">{{ e.quotes }}</p></template>

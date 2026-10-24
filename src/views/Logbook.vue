@@ -3,7 +3,7 @@ import { computed, ref } from 'vue';
 import Icon from '../components/Icon.vue';
 import { store } from '../services/store.js';
 import { SECTION_LABEL } from '../services/categories.js';
-import { deLocal } from '../services/util.js';
+import { deLocal, deTime } from '../services/util.js';
 
 const q = ref('');
 const section = ref('');
@@ -62,7 +62,7 @@ const cases = computed(() => Object.values(store.data?.cases || {}));
               <span v-if="e.retracted" class="badge warn">zurückgezogen</span>
               <span v-if="e.addenda.length" class="badge">{{ e.addenda.length }} Nachtrag</span>
               <br /><b>{{ e.title || e.category || e.facts.slice(0, 60) }}</b>
-              <br /><small>{{ deLocal(e.eventAt) }}<template v-if="e.location"> · {{ e.location }}</template></small>
+              <br /><small>{{ deLocal(e.eventAt) }}<template v-if="e.location"> · {{ e.location }}</template> · erfasst {{ deTime(e.receivedAt) }}</small>
             </div>
             <Icon name="right" />
           </router-link>
