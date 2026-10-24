@@ -4,7 +4,7 @@ services:
     image: ghcr.io/flexisticker/mlz-protokoll:latest
     container_name: mlz-protokoll
     restart: unless-stopped
-    ports: ["8094:8090"]
+    ports: ["8095:8090"]
     environment:
       - TZ=Europe/Berlin
     volumes:

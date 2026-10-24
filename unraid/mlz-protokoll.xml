@@ -10,7 +10,7 @@
   <Category>Productivity:</Category>
   <WebUI>http://[IP]:[PORT:8090]/</WebUI>
   <Icon>https://raw.githubusercontent.com/flexisticker/MLZ-Protokoll/main/public/icon-192.png</Icon>
-  <Config Name="Web-Port" Target="8090" Default="8094" Mode="tcp" Description="Port im Heimnetz (Nginx Proxy Manager zeigt hierauf)" Type="Port" Display="always" Required="true">8094</Config>
+  <Config Name="Web-Port" Target="8090" Default="8095" Mode="tcp" Description="Port im Heimnetz (Nginx Proxy Manager zeigt hierauf)" Type="Port" Display="always" Required="true">8095</Config>
   <Config Name="Daten" Target="/data" Default="/mnt/user/appdata/mlz-protokoll" Mode="rw" Description="Datenbank, Originaldateien, Zeitstempel, Sicherungen" Type="Path" Display="always" Required="true">/mnt/user/appdata/mlz-protokoll</Config>
   <Config Name="Sprachmodelle (Video-Zentrale)" Target="/models" Default="/mnt/user/appdata/video-zentrale/whisper" Mode="ro" Description="Whisper-Modelle der Video-Zentrale mitbenutzen (nur lesend). Fehlende Modelle lädt MLZ in den eigenen Datenordner." Type="Path" Display="always" Required="false">/mnt/user/appdata/video-zentrale/whisper</Config>
   <Config Name="Zeitzone" Target="TZ" Default="Europe/Berlin" Mode="" Description="" Type="Variable" Display="advanced" Required="true">Europe/Berlin</Config>

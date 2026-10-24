@@ -1,6 +1,6 @@
 # MLZ-Protokoll auf Unraid installieren
 
-Ein Container (`mlz-protokoll`, Port 8094 → 8090). Die Spracherkennung (whisper.cpp) ist eingebaut – dieselbe Technik
+Ein Container (`mlz-protokoll`, Port 8095 → 8090). Die Spracherkennung (whisper.cpp) ist eingebaut – dieselbe Technik
 wie in der Video-Zentrale. Deren schon heruntergeladene Sprachmodelle werden **mitbenutzt** (nur lesend eingehängt), es wird
 nichts doppelt geladen und es braucht keinen zweiten Container. Diktate warten nie auf Video-Erkennungen, und die Inhalte
 laufen nicht durch die Video-Zentrale.
@@ -14,10 +14,10 @@ Den vorhandenen Token weiterverwenden – er gilt für alle Pakete von `flexisti
 
 1. `unraid/mlz-protokoll.xml` nach `/boot/config/plugins/dockerMan/templates-user/my-mlz-protokoll.xml` kopieren.
 2. Docker → „Add Container“ → Vorlage `mlz-protokoll` → Apply.
-   - Port: `8094` (frei wählbar)
+   - Port: `8095` (frei wählbar)
    - Daten: `/mnt/user/appdata/mlz-protokoll`
    - Sprachmodelle: `/mnt/user/appdata/video-zentrale/whisper` → `/models`, Zugriff **Read Only**
-3. Test im Heimnetz: `http://192.168.1.10:8094` → Einrichten (Name, Benutzername, Passwort).
+3. Test im Heimnetz: `http://192.168.1.10:8095` → Einrichten (Name, Benutzername, Passwort).
 
 ## 3. Spracherkennung prüfen
 
@@ -42,7 +42,7 @@ Wie bei `studio.flexisticker.de`:
 
 1. DNS: A-Eintrag z. B. `protokoll.flexisticker.de` → feste IP (für das Let's-Encrypt-Zertifikat),
    lokaler UniFi-DNS-Eintrag `protokoll` → 192.168.1.111.
-2. NPM → Proxy Host: Domain `protokoll.flexisticker.de`, Forward `http://192.168.1.10:8094`,
+2. NPM → Proxy Host: Domain `protokoll.flexisticker.de`, Forward `http://192.168.1.10:8095`,
    **Websockets an**, Access List **„Nur Heimnetz“**, SSL: Let's Encrypt, Force SSL, HTTP/2.
 3. Unter „Advanced“ für große Sprachaufnahmen/Fotos:
    ```
