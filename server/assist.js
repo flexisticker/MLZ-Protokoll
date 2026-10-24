@@ -6,7 +6,7 @@ import { db, kvGet, kvSet } from './db.js';
 import { append, getRow, parsePayload } from './evidence.js';
 import { transcriptOf } from './transcribe.js';
 import { CATEGORIES } from '../shared/categories.js';
-import { ENTRY_FIELDS, SCHEMA, normalize, systemPrompt, userPrompt } from '../shared/assist.js';
+import { ENTRY_FIELDS, SCHEMA, combineSpoken, normalize, systemPrompt, userPrompt } from '../shared/assist.js';
 import { parseWorkTime } from '../shared/timeparse.js';
 
 const CLAUDE_MODEL = 'claude-opus-5-5';
@@ -191,7 +191,7 @@ async function runFor(id) {
   const audio = (d.fileIds || []).filter((f) => { const r = getRow(f); return r && r.kind === 'file' && parsePayload(r)?.purpose?.includes('audio'); });
   const texts = audio.map((f) => transcriptOf(f)?.text);
   if (texts.some((t) => t == null)) { setStatus(id, { status: 'transcribing' }); return; }
-  const spoken = texts.filter((t) => t && t !== '(keine Sprache erkannt)').join('\n\n');
+  const spoken = combineSpoken(texts);
   if (!spoken.trim()) { setStatus(id, { status: 'error', error: 'Keine Sprache erkannt – bitte nochmal sprechen' }); return; }
   setStatus(id, { status: 'running', engine: c.engine, startedAt: new Date().toISOString() });
   const now = localNow();
@@ -199,13 +199,16 @@ async function runFor(id) {
   const out = c.engine === 'claude' ? await runClaude(spoken, now) : await runOllama(spoken, now);
   const n = normalize(out.result, now);
   // Arbeitszeit: feste Regeln für Uhrzeiten sind zuverlässiger als die KI
+  // Mehrere Aufnahmen der Reihe nach auswerten: eine spätere Angabe (Korrektur) ersetzt die frühere.
   if (n.kind === 'time') {
-    const p = parseWorkTime(spoken, now.slice(0, 10));
-    if (p.start) n.time.start = p.start;
-    if (p.end) n.time.end = p.end;
-    if (p.breakMinutes != null) n.time.breakMinutes = p.breakMinutes;
-    if (p.date) n.time.date = p.date;
-    if (!n.time.orderedBy && p.orderedBy) n.time.orderedBy = p.orderedBy;
+    for (const t of texts.filter((x) => x && x !== '(keine Sprache erkannt)')) {
+      const p = parseWorkTime(t, now.slice(0, 10));
+      if (p.start) n.time.start = p.start;
+      if (p.end) n.time.end = p.end;
+      if (p.breakMinutes != null) n.time.breakMinutes = p.breakMinutes;
+      if (p.dateGiven) n.time.date = p.date;
+      if (p.orderedBy) n.time.orderedBy = p.orderedBy;
+    }
   }
   const seconds = Math.round((Date.now() - t0) / 1000);
   const { row } = append({ kind: 'assist', ref: id, device: 'Server', payload: { draftId: id, fileIds: audio, engine: out.engine, model: out.model, seconds, kind: n.kind, result: n } });

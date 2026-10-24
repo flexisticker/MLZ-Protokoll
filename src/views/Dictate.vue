@@ -6,7 +6,7 @@ import Icon from '../components/Icon.vue';
 import Recorder from '../components/Recorder.vue';
 import FileItem from '../components/FileItem.vue';
 import Modal from '../components/Modal.vue';
-import { deleteDraft, finalizeDraft, newDraft, queueEvidence, queueFile, saveDraft, settings, store, toast } from '../services/store.js';
+import { deleteDraft, draftHasContent, finalizeDraft, newDraft, queueEvidence, queueFile, saveDraft, settings, store, toast } from '../services/store.js';
 import { api } from '../services/api.js';
 import { KINDS, mergeAssist } from '../../shared/assist.js';
 import { webSpeech, webSpeechAvailable } from '../services/recorder.js';
@@ -27,16 +27,21 @@ onMounted(async () => {
   const id = route.params.id;
   let draft = id && store.drafts.find((x) => x.id === id);
   if (!draft) {
+    // erst nur im Speicher – gespeichert wird der Entwurf, sobald etwas aufgenommen, fotografiert oder geschrieben ist
     draft = newDraft(route.query.bereich === 'br' ? 'br' : 'incident', { sectionChosen: route.query.bereich === 'br' });
-    await saveDraft(draft);
-    router.replace(`/diktat/${draft.id}${route.query.foto ? '?foto=1' : ''}`);
   }
   d.value = JSON.parse(JSON.stringify(draft));
   if (route.query.foto) setTimeout(() => document.getElementById('photo-input')?.click(), 300);
 });
-const save = debounce(() => { if (d.value) saveDraft(d.value); }, 600);
+const stored = () => d.value && store.drafts.some((x) => x.id === d.value.id);
+const save = debounce(() => { if (d.value && (stored() || draftHasContent(d.value))) saveDraft(d.value); }, 600);
 watch(d, save, { deep: true });
-onBeforeUnmount(() => { clearInterval(poll); if (d.value && store.drafts.some((x) => x.id === d.value.id)) saveDraft(d.value); live.value?.(); });
+onBeforeUnmount(() => {
+  clearInterval(poll); live.value?.();
+  if (!d.value) return;
+  if (draftHasContent(d.value)) saveDraft(d.value);
+  else if (stored()) deleteDraft(d.value.id); // alles wieder geleert → kein leerer Entwurf zurücklassen
+});
 
 // ------------------------------------------------------------ KI-Ausfüllhilfe
 const assistOn = computed(() => store.assist?.engine && store.assist.engine !== 'off');
@@ -155,7 +160,7 @@ const setNow = () => { d.value.eventAt = localNow(); d.value.eventAtAuto = false
     </div>
 
     <div class="card">
-      <Recorder label="Diktieren" @recorded="recorded" />
+      <Recorder :label="d.fileIds.some((f) => d.files[f]?.purpose === 'audio') ? 'Ergänzen oder korrigieren' : 'Diktieren'" @recorded="recorded" />
       <div v-if="settings().webSpeech && webSpeechAvailable()" style="margin-top: 10px">
         <button v-if="!live" class="btn small" type="button" @click="startLive">Live-Diktat (Google)</button>
         <button v-else class="btn small rec" type="button" @click="live()">Live-Diktat beenden</button>
@@ -182,7 +187,8 @@ const setNow = () => { d.value.eventAt = localNow(); d.value.eventAtAuto = false
       </template>
       <template v-else-if="st === 'done'">
         ✨ Von der KI ausgefüllt ({{ d.assist.engine }}, {{ d.assist.seconds }} s). <b>Bitte jedes Feld prüfen</b> – mit „KI“ markierte Felder stammen unverändert von ihr.
-        <div v-if="d.assist.missing?.length" style="margin-top: 6px"><b>Es fehlt noch:</b><div v-for="q in d.assist.missing" :key="q">• {{ q }}</div><small>Einfach nochmal sprechen – die App ergänzt.</small></div>
+        <div v-if="d.assist.missing?.length" style="margin-top: 6px"><b>Es fehlt noch:</b><div v-for="q in d.assist.missing" :key="q">• {{ q }}</div></div>
+        <small style="display: block; margin-top: 6px">Etwas fehlt oder ist falsch? Oben auf „Ergänzen oder korrigieren“ und einfach sprechen, z. B. „Korrektur: Es war nicht 10 bis 12, sondern 10 bis 13 Uhr“. Was du selbst geändert hast, bleibt so.</small>
       </template>
     </div>
     <button v-if="assistOn && !d.assistWanted && d.fileIds.some((f) => store.data?.transcripts?.[f])" class="btn block" style="margin-bottom: 12px" @click="runAssist">✨ Von der KI ausfüllen lassen</button>

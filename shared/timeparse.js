@@ -79,6 +79,7 @@ function durationMinutes(str) {
   return null;
 }
 
+/** Datum aus dem Satz – oder null, wenn keins genannt ist. */
 function findDate(s, today) {
   if (/\bvorgestern\b/.test(s)) return addDays(today, -2);
   if (/\bgestern\b/.test(s)) return addDays(today, -1);
@@ -103,7 +104,7 @@ function findDate(s, today) {
     if (/\bletzte[nr]? /.test(s) && back === 0) back = 7;
     return addDays(today, -back);
   }
-  return today;
+  return null;
 }
 
 const START_WORDS = /(angefangen|anfang|beginn|begonnen|gekommen|eingestempelt|arbeitsbeginn|gestartet|start|los|ab|von|seit)/;
@@ -117,7 +118,8 @@ const PAUSE_WORDS = /(pause|mittag|mittagspause|unterbrechung)/;
 export function parseWorkTime(text, today = ymd(new Date())) {
   const s = normalize(text);
   const unsure = [];
-  const date = findDate(s, today);
+  const said = findDate(s, today);
+  const date = said || today;
   const times = findTimes(s);
   const breaks = [];
   let start = null, end = null;
@@ -165,7 +167,7 @@ export function parseWorkTime(text, today = ymd(new Date())) {
   if (om) orderedBy = restoreName(text, om[1]);
   const overtime = /\b(ueberstunde|ueberstunden|mehrarbeit|laenger)\b/.test(s) || !!orderedBy;
 
-  return { date, start: fmt(start), end: fmt(end), breakMinutes: breakMinutes ?? null, breaks, orderedBy, overtime, unsure, text: String(text || '') };
+  return { date, dateGiven: !!said || /\bheute\b/.test(s), start: fmt(start), end: fmt(end), breakMinutes: breakMinutes ?? null, breaks, orderedBy, overtime, unsure, text: String(text || '') };
 }
 
 const toMinStr = (hhmm) => { const [h, m] = String(hhmm).split(':').map(Number); return h * 60 + m; };

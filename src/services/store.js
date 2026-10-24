@@ -168,7 +168,21 @@ export async function loadDrafts() {
   }
   // festgeschriebene Entwürfe entfernen
   for (const d of map.values()) if (store.data?.entries?.[d.entryId]) { map.delete(d.id); await idbDel('drafts', d.id); }
+  // leere Entwürfe (z. B. Diktat geöffnet, aber nichts aufgenommen) aufräumen
+  for (const d of [...map.values()]) {
+    if (draftHasContent(d) || d.assistWanted) continue;
+    map.delete(d.id); await idbDel('drafts', d.id);
+    api(`/drafts/${d.id}`, { method: 'DELETE' }).catch(() => {});
+  }
   store.drafts = [...map.values()].sort((a, b) => (b.updatedAt || '').localeCompare(a.updatedAt || ''));
+}
+
+/** Hat der Entwurf schon Inhalt (Aufnahme, Foto, Text)? Leere Entwürfe werden nicht gespeichert. */
+export function draftHasContent(d) {
+  if (!d) return false;
+  if ((d.fileIds || []).length || d.caseId) return true;
+  return ['title', 'category', 'location', 'persons', 'witnesses', 'facts', 'quotes', 'consequences', 'reaction', 'assessment', 'delayReason', 'eventEnd']
+    .some((f) => String(d[f] || '').trim());
 }
 
 const dirty = new Set();

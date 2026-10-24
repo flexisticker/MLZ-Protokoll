@@ -31,3 +31,21 @@ test('mergeAssist: eigene Änderungen bleiben, KI füllt Leeres und eigene alte 
   assert.equal(mergeAssist(mine, { ...theirs, assist: { updatedAt: '0' } }).title, 'alter KI-Titel'); // älterer Stand ändert nichts
   assert.deepEqual(aiSummary({ ...m }), { kept: ['title', 'location', 'eventAt'], edited: ['facts'] });
 });
+
+test('Korrektur: mehrere Aufnahmen werden nummeriert, die spätere gilt', async () => {
+  const { combineSpoken } = await import('../shared/assist.js');
+  assert.equal(combineSpoken(['Eins.']), 'Eins.');
+  const two = combineSpoken(['Von 10 bis 12.', '(keine Sprache erkannt)', 'Korrektur: bis 13 Uhr.']);
+  assert.match(two, /^Aufnahme 1:\nVon 10 bis 12\./);
+  assert.match(two, /Aufnahme 2 \(später gesprochen – Ergänzung oder Korrektur\):\nKorrektur: bis 13 Uhr\./);
+});
+
+test('Korrektur ohne Datum lässt den Tag stehen', async () => {
+  const { parseWorkTime } = await import('../shared/timeparse.js');
+  const c = parseWorkTime('Korrektur: Feierabend war um 17 Uhr', '2026-10-24');
+  assert.equal(c.end, '17:00');
+  assert.equal(c.start, '');
+  assert.equal(c.dateGiven, false);
+  assert.equal(parseWorkTime('gestern bis 17 Uhr', '2026-10-24').dateGiven, true);
+  assert.equal(parseWorkTime('heute bis 17 Uhr', '2026-10-24').dateGiven, true);
+});

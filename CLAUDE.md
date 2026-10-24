@@ -59,7 +59,7 @@ Eigenständiges Projekt (nicht Teil von Flex-Studio). **Keine Passwörter, Token
   192.168.3.0/24 in der Access List. Details `docs/INSTALLATION-UNRAID.md` Abschnitt 5.
 
 ## Testen
-- `npm test` (16 Tests), `node test/mock-services.mjs` (Zeitstempeldienst :8098 mit eigener CA in `test/.tsa/`, Ollama-Attrappe :8097,
+- `npm test` (18 Tests), `node test/mock-services.mjs` (Zeitstempeldienst :8098 mit eigener CA in `test/.tsa/`, Ollama-Attrappe :8097,
   Claude-Attrappe :8096 mit `CLAUDE_BASE_URL=http://127.0.0.1:8096`, Schlüssel `sk-ant-test`), Spracherkennung per
   `WHISPER_BIN=$PWD/test/fake-whisper.sh` (Text über `FAKE_WHISPER_TEXT_FILE`; braucht eine – auch leere – Modelldatei `ggml-small.bin` in `MODEL_DIR` oder `DATA_DIR/whisper`),
   Server mit `TSA_URLS=http://127.0.0.1:8098/tsr TSA_CA_FILE=$PWD/test/.tsa/ca.crt WHISPER_PRELOAD=off`.
@@ -83,6 +83,12 @@ Eigenständiges Projekt (nicht Teil von Flex-Studio). **Keine Passwörter, Token
 - **1.1.1 (24.10.2026):** `reset-login.js <name>` legt den ersten Benutzer an, wenn noch keiner existiert (Einmal-Passwort, Wechsel erzwungen).
   Anlass: Kunde sah beim ersten Aufruf eine Anmeldung statt „Einrichten“ (Ursache ungeklärt, Server meldete setup:true).
 - **1.2.0 (24.10.2026):** KI-Ausfüllhilfe (Ollama lokal, Claude optional), Knopf „Sprechen – die App füllt aus“.
+- **1.3.0 (24.10.2026):** Entwürfe erst bei Inhalt speichern (`draftHasContent`; leere werden in `loadDrafts` aufgeräumt) – vorher legte
+  schon das Öffnen der Diktat-Seite einen Entwurf an. Startseite „Zuletzt festgehalten“ (5 Einträge + Knopf Logbuch).
+  **Korrektur per Sprache:** weitere Aufnahme im Entwurf („Ergänzen oder korrigieren“) → `combineSpoken` nummeriert die Aufnahmen,
+  Prompt: spätere Aussage gilt, alle Felder füllen; Arbeitszeit: Regel-Parser je Aufnahme der Reihe nach, spätere Angabe ersetzt
+  (`parseWorkTime(...).dateGiven` – Korrektur ohne Datum bleibt beim Tag, auch im Formular „Korrektur sprechen“). Nach dem Festschreiben
+  bleibt die Korrektur ein (gesprochener) Nachtrag.
 
 ## Offene Punkte / Ideen
 - Nach der Installation: Erkennungsdauer auf dem Xeon messen; bei guter Zeit Diktat-Modell auf `large-v3-turbo-q5_0` stellen.

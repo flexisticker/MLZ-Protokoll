@@ -28,6 +28,10 @@ export function systemPrompt(categories) {
     'Du hilfst einem Arbeitnehmer, der auch Betriebsratsmitglied ist, gesprochene Notizen in ein Protokoll zu übertragen.',
     'Das Protokoll kann später vor dem Arbeitsgericht verwendet werden. Darum gilt streng:',
     '- Erfinde nichts. Übernimm nur, was gesagt wurde. Unbekanntes bleibt ein leerer Text "".',
+    '- Fülle ALLE Felder aus, zu denen etwas gesagt wurde – nicht nur "facts". Ort, Personen, Zeugen, Zitate, Folgen, Reaktion und Bewertung',
+    '  stehen oft beiläufig im Text („in der Halle“, „vor dem Kollegen X“, „ich hab gesagt …“, „das fand ich unmöglich“).',
+    '- Mehrere Aufnahmen: Spätere Aufnahmen ergänzen oder KORRIGIEREN frühere. Bei Widerspruch gilt immer die spätere Aussage',
+    '  (z. B. „Korrektur: …“, „nein, es war …“, „ich hab mich vertan …“). Übernimm in alle Felder nur die korrigierte Fassung.',
     '- "facts": nur Tatsachen in sachlicher Ich-Form und zeitlicher Reihenfolge, nah am Gesagten, ohne Bewertungen und ohne Füllwörter.',
     '- "quotes": nur wörtliche Rede, die als wörtlich erkennbar ist, je Zeile im Format Name: „Zitat“.',
     '- "assessment": nur Gefühle, Meinungen und Bewertungen des Sprechers (z. B. „ich fand das schikanös“).',
@@ -46,12 +50,19 @@ export function systemPrompt(categories) {
   ].join('\n');
 }
 
+/** Mehrere Aufnahmen eines Entwurfs als ein Text – nummeriert, damit die KI Korrekturen erkennt. */
+export function combineSpoken(texts) {
+  const list = texts.map((t) => String(t || '').trim()).filter((t) => t && t !== '(keine Sprache erkannt)');
+  if (list.length <= 1) return list[0] || '';
+  return list.map((t, i) => (i === 0 ? `Aufnahme 1:\n${t}` : `Aufnahme ${i + 1} (später gesprochen – Ergänzung oder Korrektur):\n${t}`)).join('\n\n');
+}
+
 export function userPrompt(text, now, extra = '') {
   const d = new Date(`${now.slice(0, 10)}T12:00:00`);
   return [
     `Heute ist ${WD[d.getDay()]}, der ${now.slice(0, 10)}, aktuelle Uhrzeit ${now.slice(11, 16)}.`,
     extra,
-    'Gesprochene Notiz (automatisch erkannt, kann Hörfehler enthalten):',
+    'Gesprochene Notiz (automatisch erkannt, kann Hörfehler enthalten; bei mehreren Aufnahmen gilt die spätere):',
     '"""',
     String(text || '').trim(),
     '"""',

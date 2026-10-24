@@ -7,7 +7,7 @@ import { queueEvidence, settings, store, toast } from '../services/store.js';
 import { todos } from '../services/todos.js';
 import { dayRow, totalBalance, vacation } from '../services/derived.js';
 import { fmtDur } from '../../shared/worktime.js';
-import { localNow, minutesBetween, nowTime, today } from '../services/util.js';
+import { deLocal, localNow, minutesBetween, nowTime, today } from '../services/util.js';
 import { holidayName } from '../../shared/holidays.js';
 
 const router = useRouter();
@@ -48,6 +48,9 @@ async function stamp(type, at = localNow()) {
   custom.value = null;
 }
 const list = computed(() => todos());
+const recent = computed(() => Object.values(store.data?.entries || {}).filter((e) => !e.erased)
+  .sort((a, b) => String(b.receivedAt).localeCompare(String(a.receivedAt))).slice(0, 5));
+const entryCount = computed(() => Object.values(store.data?.entries || {}).filter((e) => !e.erased).length);
 const s = computed(() => settings());
 const holiday = computed(() => holidayName(today(), s.value.state, s.value.extraHolidays));
 </script>
@@ -121,6 +124,27 @@ const holiday = computed(() => holidayName(today(), s.value.state, s.value.extra
             <span class="grow" :class="x.level === 'bad' ? 'neg' : ''">{{ x.text }}</span>
             <Icon name="right" />
           </a>
+        </li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <div class="row between">
+        <h2 style="margin: 0">Zuletzt festgehalten</h2>
+        <router-link to="/logbuch" class="btn small">Logbuch ({{ entryCount }})</router-link>
+      </div>
+      <div v-if="!recent.length" class="empty">Noch keine festgeschriebenen Einträge.</div>
+      <ul v-else class="list">
+        <li v-for="e in recent" :key="e.id">
+          <router-link class="item" :to="`/eintrag/${e.id}`">
+            <div class="grow">
+              <span class="badge" :class="e.section === 'br' ? 'br' : 'inc'">{{ e.section === 'br' ? 'Betriebsrat' : 'Auffälligkeit' }}</span>
+              <span v-if="e.addenda?.length" class="badge">{{ e.addenda.length }} Nachtrag</span>
+              <br /><b>{{ e.title || e.category || (e.facts || '').slice(0, 60) }}</b>
+              <br /><small>{{ deLocal(e.eventAt) }}<template v-if="e.location"> · {{ e.location }}</template></small>
+            </div>
+            <Icon name="right" />
+          </router-link>
         </li>
       </ul>
     </div>

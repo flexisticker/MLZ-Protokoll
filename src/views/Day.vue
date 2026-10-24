@@ -81,7 +81,7 @@ function apply(text) {
   const p = parseWorkTime(text, today());
   parsed.value = p;
   f.value.spoken = text;
-  if (p.date !== date.value) {
+  if (p.dateGiven && p.date !== date.value) { // nur wechseln, wenn ein Datum genannt wurde (eine Korrektur ohne Datum bleibt beim Tag)
     toast(`Erkanntes Datum: ${de(p.date)} – Tag gewechselt`);
     router.replace({ path: `/zeit/tag/${p.date}`, query: { text, file: f.value.fileId || '', quelle: f.value.source } });
     return;
@@ -143,7 +143,8 @@ const stampLabel = { in: 'Beginn', out: 'Ende', 'break-start': 'Pause', 'break-e
     </p>
 
     <div class="card">
-      <Recorder label="Arbeitszeit sprechen" :max-sec="120" @recorded="recorded" />
+      <Recorder :label="audio?.text ? 'Korrektur sprechen' : 'Arbeitszeit sprechen'" :max-sec="120" @recorded="recorded" />
+      <small v-if="audio?.text" class="muted" style="display: block; margin-top: 6px">Etwas falsch erkannt oder versprochen? Einfach nochmal sprechen, z. B. „Korrektur: Feierabend war um 17 Uhr“ – nur die genannten Angaben werden ersetzt.</small>
       <small v-if="listenHint && !audio" class="muted" style="display: block; margin-top: 8px">Beispiel: „Heute um halb acht angefangen, 30 Minuten Pause, Feierabend um 16 Uhr 15. Herr Maier hat die Überstunden angeordnet.“</small>
       <button v-if="settings().webSpeech && webSpeechAvailable()" class="btn small" style="margin-top: 8px" @click="living ? stopLive() : live()">{{ living ? 'Beenden' : 'Live-Erkennung (Google)' }}</button>
       <p v-if="living" class="quote">{{ liveText || '…' }}</p>
