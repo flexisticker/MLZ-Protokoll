@@ -18,6 +18,8 @@ Den vorhandenen Token weiterverwenden – er gilt für alle Pakete von `flexisti
    - Daten: `/mnt/user/appdata/mlz-protokoll`
    - Sprachmodelle: `/mnt/user/appdata/video-zentrale/whisper` → `/models`, Zugriff **Read Only**
 3. Test im Heimnetz: `http://192.168.1.10:8095` → Einrichten (Name, Benutzername, Passwort).
+   Klappt das nicht: Unraid-Terminal `docker exec mlz-protokoll node server/reset-login.js michael` legt den Zugang an
+   und zeigt ein Einmal-Passwort; damit anmelden und ein eigenes Passwort vergeben.
 
 ## 3. Spracherkennung prüfen
 

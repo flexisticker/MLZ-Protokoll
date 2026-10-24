@@ -57,6 +57,8 @@ Eigenständiges Projekt (nicht Teil von Flex-Studio). **Keine Passwörter, Token
 - **1.0.0 (24.10.2026):** Erstausgabe mit allen Funktionen oben.
 - **1.1.0 (24.10.2026):** Spracherkennung mit eingebautem whisper.cpp statt speaches; Modelle der Video-Zentrale werden mitbenutzt;
   Modellwahl in der App.
+- **1.1.1 (24.10.2026):** `reset-login.js <name>` legt den ersten Benutzer an, wenn noch keiner existiert (Einmal-Passwort, Wechsel erzwungen).
+  Anlass: Kunde sah beim ersten Aufruf eine Anmeldung statt „Einrichten“ (Ursache ungeklärt, Server meldete setup:true).
 
 ## Offene Punkte / Ideen
 - Nach der Installation: Erkennungsdauer auf dem Xeon messen; bei guter Zeit Diktat-Modell auf `large-v3-turbo-q5_0` stellen.
