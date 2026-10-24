@@ -74,7 +74,18 @@ Wie bei `studio.flexisticker.de`:
    ```
 4. Am Handy `https://protokoll.flexisticker.de` öffnen → Chrome-Menü → **„App installieren“** bzw. „Zum Startbildschirm“.
 
-**Von unterwegs:** nicht öffentlich freigeben, sondern über VPN (UniFi WireGuard/Teleport) ins Heimnetz.
+**Von unterwegs:** nicht öffentlich freigeben, sondern über VPN ins Heimnetz. So läuft es beim Kunden (24.10.2026):
+
+- **WireGuard-Server auf der UDM** (nicht auf der Fritzbox – die Fritzbox reicht als Exposed Host alles an die UDM durch).
+  UniFi → Einstellungen → VPN → VPN-Server → WireGuard: Port `51820`, „Alternative Adresse für Clients“ = feste öffentliche IP
+  (die UDM sieht hinter der Fritzbox nur ihre 192.168.178.x-Adresse), VPN-Netz `192.168.3.0/24`.
+- **DNS-Server im WireGuard-Server = `192.168.3.1`** (die UDM im VPN-Netz). Nur so löst das Handy `protokoll.flexisticker.de` intern
+  auf (lokaler UniFi-DNS-Eintrag → 192.168.1.111) und der Aufruf geht durch den Tunnel. Ein falscher DNS-Server (z. B. `192.168.1.1`,
+  wenn das nicht die UDM ist) legt das ganze Internet im Tunnel lahm. Nach jeder DNS-Änderung das Profil am Handy per QR-Code neu einlesen.
+- **NPM-Access-List „Nur Heimnetz“:** `allow 192.168.1.0/24`, `allow 192.168.175.0/24`, `allow 192.168.3.0/24`, zuletzt `deny all`.
+- Erkennen im NPM-Protokoll (`data/logs/proxy-host-*_access.log`): `[Client 192.168.3.x]` = durch den Tunnel; eine öffentliche
+  Adresse = am Tunnel vorbei (DNS). Zeilen mit fremden Rechenzentrums-Adressen und „X11; Linux“ sind Scanner, die 403 ist dort richtig.
+- Zu Hause im WLAN ohne VPN testen (der Umweg über die Fritzbox klappt von innen oft nicht).
 Ohne Netz nimmt die App trotzdem auf – Aufnahmen und Einträge bleiben auf dem Handy und werden gesendet,
 sobald wieder eine Verbindung besteht (oben erscheint dann „offline“ und die Anzahl wartender Einträge).
 

@@ -52,6 +52,12 @@ Eigenständiges Projekt (nicht Teil von Flex-Studio). **Keine Passwörter, Token
 - Anmeldung `server/auth.js`/`passkeys.js`: scrypt, TOTP (eigene Umsetzung), 10 Wiederherstellungscodes, Passkeys (@simplewebauthn, RP-ID aus Host),
   Sitzungen als Hash, Sperre 8 Fehlversuche/Std., CSRF-Kopf **`X-MLZ: 1`**. Notfall: `node server/reset-login.js <name>` in der Container-Konsole.
 
+## Netz beim Kunden (Stand 24.10.2026)
+- Fritzbox (Exposed Host) → UDM (WAN 192.168.178.24) → Heimnetz 192.168.1.0/24, Büro-PC 192.168.175.0/24. NPM 192.168.1.111,
+  Unraid 192.168.1.10. Domain `protokoll.flexisticker.de` (A-Eintrag Alfahosting → feste IP, lokaler UniFi-DNS → NPM), Access List „Nur Heimnetz“.
+- Unterwegs: **WireGuard auf der UDM**, VPN-Netz 192.168.3.0/24, DNS-Server **192.168.3.1** (mit 192.168.1.1 ging im Tunnel gar nichts),
+  192.168.3.0/24 in der Access List. Details `docs/INSTALLATION-UNRAID.md` Abschnitt 5.
+
 ## Testen
 - `npm test` (16 Tests), `node test/mock-services.mjs` (Zeitstempeldienst :8098 mit eigener CA in `test/.tsa/`, Ollama-Attrappe :8097,
   Claude-Attrappe :8096 mit `CLAUDE_BASE_URL=http://127.0.0.1:8096`, Schlüssel `sk-ant-test`), Spracherkennung per
