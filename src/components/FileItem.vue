@@ -38,7 +38,7 @@ async function retry() { tr.value = await api(`/files/${props.id}/retry`, { meth
 onMounted(() => { loadLocal(); check(); poll = setInterval(() => { if (tr.value?.status !== 'done' && tr.value?.status !== 'error') check(); }, 4000); });
 watch(server, () => { loadLocal(); check(); });
 onBeforeUnmount(() => { clearInterval(poll); if (local.value) URL.revokeObjectURL(local.value); });
-const label = { queued: 'wartet auf Erkennung', running: 'wird erkannt …', upload: 'wird hochgeladen …', none: 'noch nicht gesendet', error: 'Erkennung fehlgeschlagen' };
+const label = { download: 'Sprachmodell wird geladen (einmalig) …', queued: 'wartet auf Erkennung', running: 'wird erkannt …', upload: 'wird hochgeladen …', none: 'noch nicht gesendet', error: 'Erkennung fehlgeschlagen' };
 </script>
 
 <template>

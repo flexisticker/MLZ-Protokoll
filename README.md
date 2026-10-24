@@ -3,7 +3,7 @@
 Selbst gehostete App (Docker auf Unraid, Bedienung am Handy) für:
 
 - **Logbuch per Sprache:** Auffälligkeiten im Beruf und Betriebsratsangelegenheiten diktieren, lokale Spracherkennung
-  (Whisper, keine Cloud), Fotos und Anlagen, Leitfragen (wer, was, wann, wo, Zeugen, Zitate), Tatsachen getrennt von Bewertungen.
+  (whisper.cpp im Container, Modelle der Video-Zentrale mitbenutzt, keine Cloud), Fotos und Anlagen, Leitfragen (wer, was, wann, wo, Zeugen, Zitate), Tatsachen getrennt von Bewertungen.
 - **Arbeitszeit:** Stempeln (Beginn/Pause/Feierabend) oder per Sprache („halb acht angefangen, 30 Minuten Pause, bis 16 Uhr“),
   Pausenregeln (§ 4 ArbZG), Soll/Ist/Saldo, Feiertage je Bundesland, halbe freie Tage (24.12./31.12.) mit Grundlage,
   Mehrarbeit mit „angeordnet/gebilligt/geduldet von“, Ausschlussfristen und Geltendmachung.
@@ -26,9 +26,10 @@ Beweisführung: [`docs/BEWEISFUEHRUNG.md`](docs/BEWEISFUEHRUNG.md)
 ```
 npm install
 npm test                                  # Feiertage, Sprach-Parser, Arbeitszeitlogik
-node test/mock-services.mjs &             # Whisper- und Zeitstempel-Attrappe (8099/8098)
+node test/mock-services.mjs &             # Zeitstempel-Attrappe (8098)
+mkdir -p data/whisper && touch data/whisper/ggml-small.bin   # Platzhalter-Modell für die Attrappe
 npx vite build
-DATA_DIR=./data WHISPER_URL=http://127.0.0.1:8099 TSA_URLS=http://127.0.0.1:8098/tsr \
+DATA_DIR=./data WHISPER_BIN=$PWD/test/fake-whisper.sh TSA_URLS=http://127.0.0.1:8098/tsr \
   TSA_CA_FILE=$PWD/test/.tsa/ca.crt WHISPER_PRELOAD=off npm start   # http://localhost:8090
 ```
 

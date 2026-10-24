@@ -140,7 +140,7 @@ const stampLabel = { in: 'Beginn', out: 'Ende', 'break-start': 'Pause', 'break-e
       <div v-if="audio" style="margin-top: 10px">
         <p v-if="audio.text" class="quote">{{ audio.text }}</p>
         <small v-else-if="audio.status === 'error'" class="neg">Erkennung fehlgeschlagen: {{ audio.error }} – bitte von Hand eintragen.</small>
-        <small v-else class="muted">{{ audio.status === 'upload' ? 'wird hochgeladen …' : 'Text wird erkannt …' }}</small>
+        <small v-else class="muted">{{ audio.status === 'upload' ? 'wird hochgeladen …' : audio.status === 'download' ? 'Sprachmodell wird geladen (einmalig) …' : 'Text wird erkannt …' }}</small>
       </div>
       <div v-if="unsure.length" class="alert warn" style="margin-top: 8px">Nicht sicher erkannt: {{ unsure.map((u) => ({ start: 'Beginn', end: 'Ende', break: 'Pause' })[u]).join(', ') }} – bitte prüfen.</div>
     </div>

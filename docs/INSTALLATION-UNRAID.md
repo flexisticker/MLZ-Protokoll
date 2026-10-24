@@ -1,47 +1,40 @@
 # MLZ-Protokoll auf Unraid installieren
 
-Zwei Container laufen in einem eigenen Docker-Netz `mlz-net`:
-
-| Container | Aufgabe | Port |
-|---|---|---|
-| `mlz-protokoll` | App (Oberfläche, Datenbank, Beweiskette) | 8094 → 8090 |
-| `speaches` | lokale Spracherkennung (Whisper) | **keiner** – nur intern |
+Ein Container (`mlz-protokoll`, Port 8094 → 8090). Die Spracherkennung (whisper.cpp) ist eingebaut – dieselbe Technik
+wie in der Video-Zentrale. Deren schon heruntergeladene Sprachmodelle werden **mitbenutzt** (nur lesend eingehängt), es wird
+nichts doppelt geladen und es braucht keinen zweiten Container. Diktate warten nie auf Video-Erkennungen, und die Inhalte
+laufen nicht durch die Video-Zentrale.
 
 ## 1. Paket-Zugang (falls das Repository privat ist)
 
 Wie bei Flex-Studio: Unraid meldet sich mit einem GitHub-Token (`read:packages`) bei `ghcr.io` an.
 Den vorhandenen Token weiterverwenden – er gilt für alle Pakete von `flexisticker`.
 
-## 2. Netz anlegen (einmalig)
-
-Unraid → Terminal (oben rechts `>_`):
-
-```
-docker network create mlz-net
-```
-
-## 3. Spracherkennung (speaches)
-
-1. Datei `unraid/speaches.xml` nach `/boot/config/plugins/dockerMan/templates-user/my-speaches.xml` kopieren
-   (oder in Unraid „Add Container“ von Hand ausfüllen: Repository `ghcr.io/speaches-ai/speaches:latest-cpu`,
-   Network Type `mlz-net`, Pfad `/mnt/user/appdata/speaches` → `/home/ubuntu/.cache/huggingface/hub`).
-2. Docker → „Add Container“ → Vorlage `speaches` wählen → Apply.
-3. **Kein Port** freigeben.
-
-Beim ersten Start lädt MLZ-Protokoll die Modelle herunter (ca. 0,5 GB + 1,6 GB, dauert einige Minuten).
-Status: in der App unter **Mehr → Prüfung & Zeitstempel → Spracherkennung**.
-
-Hinweis: Der Pfad für den Modell-Zwischenspeicher kann je nach speaches-Version abweichen. Werden die Modelle nach
-jedem Neustart neu geladen, in der speaches-Dokumentation nachsehen, wo `HF_HOME` liegt, und den Pfad anpassen.
-
-## 4. MLZ-Protokoll
+## 2. Container anlegen
 
 1. `unraid/mlz-protokoll.xml` nach `/boot/config/plugins/dockerMan/templates-user/my-mlz-protokoll.xml` kopieren.
 2. Docker → „Add Container“ → Vorlage `mlz-protokoll` → Apply.
-   - Network Type: `mlz-net`
    - Port: `8094` (frei wählbar)
    - Daten: `/mnt/user/appdata/mlz-protokoll`
+   - Sprachmodelle: `/mnt/user/appdata/video-zentrale/whisper` → `/models`, Zugriff **Read Only**
 3. Test im Heimnetz: `http://192.168.1.10:8094` → Einrichten (Name, Benutzername, Passwort).
+
+## 3. Spracherkennung prüfen
+
+In der App: **Mehr → Prüfung & Zeitstempel → Spracherkennung**.
+
+- Standard ist `small` (liegt schon bei der Video-Zentrale).
+- Genauer: `large-v3-turbo-q5_0` (≈ 550 MB). MLZ lädt es beim Auswählen einmalig nach `/data/whisper` (eigener Ordner,
+  weil die Modelle der Video-Zentrale nur lesend eingehängt sind). Soll die Video-Zentrale es auch sehen, den Pfad
+  `/models` auf **Read/Write** stellen – dann landet es in ihrem Ordner.
+- Nach dem ersten Diktat steht dort die Rechenzeit. Auf dem Xeon E3-1225 v5 grob: `small` 15–30 s, `large-v3-turbo-q5_0`
+  1–2 Min. je Minute Diktat (Schätzung). Arbeitszeit-Sätze laufen immer mit dem schnellen Modell.
+
+## 4. Kein eigenes Netz nötig
+
+Version 1.0.0 brauchte noch den Container `speaches` und das Netz `mlz-net`. Ab 1.1.0 kann beides weg:
+Docker → `speaches` → Remove (inkl. Image), dann im Terminal `docker network rm mlz-net` und bei `mlz-protokoll`
+Network Type auf `bridge` stellen. `/mnt/user/appdata/speaches` kann gelöscht werden.
 
 ## 5. HTTPS über Nginx Proxy Manager (nötig für Mikrofon, Kamera, Passkey)
 
@@ -93,5 +86,6 @@ Docker → „Check for Updates“ → „apply update“ (Daten bleiben erhalte
   dateien/JJJJ/       Original-Sprachaufnahmen und Fotos (schreibgeschützt)
   zeitstempel/        RFC-3161-Zeitstempel (.tsr)
   sicherungen/        tägliche Datenbanksicherungen (30 Tage)
+  whisper/            selbst geladene Sprachmodelle (falls nicht bei der Video-Zentrale vorhanden)
   arbeit/             Arbeitskopien (können gelöscht werden)
 ```

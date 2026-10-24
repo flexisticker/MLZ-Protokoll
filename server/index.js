@@ -257,6 +257,11 @@ app.get('/api/files/:id/transcript', (req, res) => res.json(tr.status(req.params
 app.post('/api/files/:id/retry', (req, res) => { tr.retry(req.params.id); res.json(tr.status(req.params.id)); });
 app.get('/api/transcribe/status', wrap(async (req, res) => res.json(await tr.serviceStatus())));
 app.post('/api/transcribe/preload', (req, res) => { tr.preloadModels(); res.json({ ok: true }); });
+app.put('/api/transcribe/config', wrap(async (req, res) => {
+  tr.setConfig(req.body || {});
+  tr.preloadModels(); // gewähltes Modell gleich herunterladen, falls es noch fehlt
+  res.json(await tr.serviceStatus());
+}));
 
 // ------------------------------------------------------------ Entwürfe (änderbar, noch nicht festgeschrieben)
 app.get('/api/drafts', (req, res) => res.json(db.prepare('SELECT * FROM drafts ORDER BY updated_at DESC').all().map((d) => ({ ...JSON.parse(d.data), id: d.id, updatedAt: d.updated_at }))));

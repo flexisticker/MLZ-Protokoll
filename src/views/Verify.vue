@@ -9,9 +9,15 @@ const check = ref(null);
 const anchors = ref([]);
 const status = ref(null);
 const busy = ref('');
+const wcfg = ref({ model: 'small', modelFast: 'small', threads: 4 });
+async function saveWhisper() {
+  try { status.value.whisper = await api('/transcribe/config', { method: 'PUT', body: wcfg.value }); toast('Übernommen – fehlende Modelle werden geladen'); } catch (e) { toast(e.message); }
+}
 async function load() {
   try {
     [check.value, anchors.value, status.value] = await Promise.all([api('/verify'), api('/anchors'), api('/status')]);
+    const w = status.value.whisper;
+    wcfg.value = { model: w.model, modelFast: w.modelFast, threads: w.threads };
   } catch (e) { toast(e.message); }
 }
 onMounted(load);
@@ -81,8 +87,19 @@ async function drop(o) { if (confirm('Diesen Eintrag aus der Warteschlange lösc
 
     <div v-if="status" class="card">
       <h2>Spracherkennung</h2>
-      <p :class="status.whisper.reachable ? 'pos' : 'neg'">{{ status.whisper.reachable ? 'erreichbar' : 'nicht erreichbar' }} <small class="muted">({{ status.whisper.url }})</small></p>
-      <p class="muted" style="font-size: .9rem">Modell: {{ status.whisper.model }} · schnell: {{ status.whisper.modelFast }}<br />Installiert: {{ (status.whisper.installed || []).join(', ') || '–' }}<br />Warteschlange: {{ status.whisper.queue }}<template v-if="status.whisper.last?.ok"> · zuletzt {{ status.whisper.last.seconds }} s Rechenzeit</template></p>
+      <p :class="status.whisper.ready ? 'pos' : 'neg'">whisper.cpp {{ status.whisper.ready ? 'bereit' : 'nicht gefunden' }}<template v-if="status.whisper.sharedDir"> · Modelle der Video-Zentrale eingebunden</template></p>
+      <label class="f">Modell für Diktate</label>
+      <select v-model="wcfg.model"><option v-for="(m, k) in status.whisper.models" :key="k" :value="k">{{ k }} – {{ m.info }} ({{ m.installed ? (m.shared ? 'aus Video-Zentrale' : 'vorhanden') : `wird geladen, ${m.size}` }})</option></select>
+      <label class="f">Modell für Arbeitszeit-Sätze<span class="hint">kurze Sätze – das schnelle Modell reicht meist</span></label>
+      <select v-model="wcfg.modelFast"><option v-for="(m, k) in status.whisper.models" :key="k" :value="k">{{ k }}</option></select>
+      <label class="f">Prozessorkerne</label>
+      <input v-model.number="wcfg.threads" type="number" min="1" max="16" />
+      <button class="btn" style="margin-top: 10px" @click="saveWhisper">Übernehmen</button>
+      <p v-if="status.whisper.download" class="alert" :class="status.whisper.download.error ? 'bad' : ''" style="margin-top: 10px">
+        <template v-if="status.whisper.download.error">{{ status.whisper.download.error }}</template>
+        <template v-else>Lade Modell {{ status.whisper.download.model }} … {{ status.whisper.download.total ? Math.round(status.whisper.download.done / status.whisper.download.total * 100) : '?' }} %</template>
+      </p>
+      <p class="muted" style="font-size: .9rem; margin-top: 8px">Warteschlange: {{ status.whisper.queue }}<template v-if="status.whisper.last?.ok"> · zuletzt {{ status.whisper.last.seconds }} s Rechenzeit für {{ status.whisper.last.audioSec || '?' }} s Ton ({{ status.whisper.last.model }})</template><template v-if="status.whisper.last && !status.whisper.last.ok"> · letzter Fehler: {{ status.whisper.last.error }}</template></p>
       <p class="muted" style="font-size: .85rem">Version {{ status.version }}</p>
     </div>
   </div>

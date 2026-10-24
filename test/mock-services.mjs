@@ -1,5 +1,5 @@
-// Test-Attrappen für die Entwicklung (nicht im Docker-Image):
-//   Whisper (speaches) auf Port 8099 und ein Zeitstempeldienst (RFC 3161, openssl) auf Port 8098.
+// Test-Attrappe für die Entwicklung (nicht im Docker-Image): Zeitstempeldienst (RFC 3161, openssl) auf Port 8098.
+// Spracherkennung im Test: WHISPER_BIN=test/fake-whisper.sh (siehe README).
 //   node test/mock-services.mjs
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
@@ -17,18 +17,6 @@ if (!fs.existsSync(f('tsa.crt'))) {
   fs.writeFileSync(f('serial'), '01\n');
   fs.writeFileSync(f('ts.cnf'), `[ tsa ]\ndefault_tsa = tsa_config\n[ tsa_config ]\ndir = ${DIR}\nserial = $dir/serial\nsigner_cert = $dir/tsa.crt\nsigner_key = $dir/tsa.key\nsigner_digest = sha256\ndefault_policy = 1.2.3.4.1\ndigests = sha256\naccuracy = secs:1\ness_cert_id_alg = sha256\ncrypto_device = builtin\n`);
 }
-
-const text = process.env.MOCK_TEXT || 'Heute um halb acht angefangen, 30 Minuten Pause, Feierabend um 17 Uhr. Herr Maier hat die Überstunden angeordnet.';
-http.createServer((req, res) => {
-  if (req.method === 'GET' && req.url === '/v1/models') { res.end(JSON.stringify({ data: [{ id: 'Systran/faster-whisper-small' }] })); return; }
-  if (req.method === 'POST' && req.url.startsWith('/v1/models/')) { res.writeHead(201); res.end('{}'); return; }
-  if (req.method === 'POST' && req.url === '/v1/audio/transcriptions') {
-    let n = 0; req.on('data', (c) => { n += c.length; });
-    req.on('end', () => setTimeout(() => res.end(JSON.stringify({ text: `${text}` })), 800));
-    return;
-  }
-  res.writeHead(404); res.end();
-}).listen(8099, () => console.log('Whisper-Attrappe :8099'));
 
 http.createServer((req, res) => {
   const chunks = [];

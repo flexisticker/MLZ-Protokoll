@@ -1,29 +1,88 @@
-// Spracherkennung über den lokalen Whisper-Dienst (speaches, OpenAI-kompatibel). Keine Cloud.
-// Ablauf: Original bleibt unverändert → ffmpeg erzeugt eine Arbeitskopie (16 kHz, mono) → Whisper →
+// Spracherkennung mit whisper.cpp – dieselbe Technik wie die Video-Zentrale, läuft im eigenen Container (keine Cloud).
+// Modelle: zuerst im eingehängten Ordner der Video-Zentrale (/models, nur lesend), sonst im eigenen Datenordner.
+// Ablauf: Original bleibt unverändert → ffmpeg erzeugt eine Arbeitskopie (16 kHz, mono) → whisper-cli →
 // Transkript wird als eigener Eintrag „transcript“ in die Beweiskette geschrieben (Bezug: Tondatei).
 import { spawn } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
-import { kvGet, kvSet, WORK_DIR } from './db.js';
+import { DATA_DIR, kvGet, kvSet, WORK_DIR } from './db.js';
 import { allRows, append, parsePayload } from './evidence.js';
 import { storedPath } from './files.js';
 
-export const WHISPER_URL = (process.env.WHISPER_URL || 'http://speaches:8000').replace(/\/$/, '');
-export const MODEL = process.env.WHISPER_MODEL || 'deepdml/faster-whisper-large-v3-turbo-ct2';
-export const MODEL_FAST = process.env.WHISPER_MODEL_FAST || 'Systran/faster-whisper-small';
+const BIN = process.env.WHISPER_BIN || 'whisper-cli';
+const SHARED_DIR = process.env.MODEL_DIR || '/models';
+const OWN_DIR = path.join(DATA_DIR, 'whisper');
+const MODEL_URL = process.env.WHISPER_MODEL_URL || 'https://huggingface.co/ggerganov/whisper.cpp/resolve/main/{file}';
+export const MODELS = {
+  small: { file: 'ggml-small.bin', size: '≈ 470 MB', info: 'gut und schnell (auch von der Video-Zentrale genutzt)' },
+  'large-v3-turbo-q5_0': { file: 'ggml-large-v3-turbo-q5_0.bin', size: '≈ 550 MB', info: 'sehr genau, etwa 2–3 × langsamer als small' },
+  medium: { file: 'ggml-medium.bin', size: '≈ 1,5 GB', info: 'sehr genau, deutlich langsamer' },
+};
 
-const state = new Map(); // fileId → { status: queued|running|error, error, startedAt }
+export const config = () => ({ model: 'small', modelFast: 'small', threads: 4, ...kvGet('whisper', {}) });
+export function setConfig(c) {
+  const cur = config();
+  const next = {
+    model: MODELS[c.model] ? c.model : cur.model,
+    modelFast: MODELS[c.modelFast] ? c.modelFast : cur.modelFast,
+    threads: Math.max(1, Math.min(16, Number(c.threads) || cur.threads)),
+  };
+  kvSet('whisper', next);
+  if (download?.error) download = null; // alte Fehlermeldung nach Modellwechsel nicht mehr anzeigen
+  return next;
+}
+
+let promptWords = '';
+export const setPromptWords = (w) => { promptWords = String(w || '').replace(/\s+/g, ' ').slice(0, 600); };
+
+// ------------------------------------------------------------ Modelle
+function findModel(name) {
+  const file = MODELS[name]?.file;
+  if (!file) return null;
+  for (const dir of [SHARED_DIR, OWN_DIR]) { const f = path.join(dir, file); if (fs.existsSync(f)) return f; }
+  return null;
+}
+function writableDir() {
+  try { if (fs.existsSync(SHARED_DIR)) { fs.accessSync(SHARED_DIR, fs.constants.W_OK); return SHARED_DIR; } } catch { /* nur lesend */ }
+  fs.mkdirSync(OWN_DIR, { recursive: true });
+  return OWN_DIR;
+}
+let download = null; // { model, done, total, error }
+async function ensureModel(name) {
+  const found = findModel(name);
+  if (found) return found;
+  if (download?.model === name && !download.error) {
+    while (download && download.model === name && !download.error) await new Promise((r) => setTimeout(r, 2000));
+    if (findModel(name)) return findModel(name);
+  }
+  const dir = writableDir();
+  const file = path.join(dir, MODELS[name].file);
+  const part = `${file}.mlz-part`;
+  download = { model: name, done: 0, total: 0, error: '' };
+  try {
+    const r = await fetch(MODEL_URL.replace('{file}', MODELS[name].file));
+    if (!r.ok || !r.body) throw new Error(`Download fehlgeschlagen (${r.status})`);
+    download.total = Number(r.headers.get('content-length')) || 0;
+    const out = fs.createWriteStream(part);
+    for await (const chunk of r.body) {
+      download.done += chunk.length;
+      if (!out.write(chunk)) await new Promise((res) => out.once('drain', res));
+    }
+    await new Promise((res, rej) => out.end((e) => (e ? rej(e) : res())));
+    fs.renameSync(part, file);
+    download = null;
+    return file;
+  } catch (e) {
+    fs.rmSync(part, { force: true });
+    download = { ...download, error: `Modell ${name} konnte nicht geladen werden: ${e.message}` };
+    throw new Error(download.error);
+  }
+}
+
+// ------------------------------------------------------------ Warteschlange
+const state = new Map(); // fileId → { status: queued|running|error, error, fast }
 const queue = [];
 let busy = false;
-let promptWords = '';
-export const setPromptWords = (w) => { promptWords = String(w || '').slice(0, 600); };
-
-export function status(fileId) {
-  if (transcriptOf(fileId)) return { status: 'done', ...transcriptOf(fileId) };
-  const s = state.get(fileId);
-  if (s) return { ...s, position: s.status === 'queued' ? queue.indexOf(fileId) + 1 : 0 };
-  return { status: 'none' };
-}
 
 let transcripts = null; // fileId → { text, model, seconds }
 export function transcriptOf(fileId) {
@@ -35,6 +94,14 @@ export function transcriptOf(fileId) {
 }
 export const resetCache = () => { transcripts = null; };
 
+export function status(fileId) {
+  const t = transcriptOf(fileId);
+  if (t) return { status: 'done', ...t };
+  const s = state.get(fileId);
+  if (s) return { ...s, position: s.status === 'queued' ? queue.indexOf(fileId) + 1 : 0, download: download && { ...download } };
+  return { status: 'none' };
+}
+
 export function enqueue(fileId, { fast = false, front = false } = {}) {
   if (transcriptOf(fileId) || (state.get(fileId) && state.get(fileId).status !== 'error')) return;
   state.set(fileId, { status: 'queued', fast });
@@ -42,42 +109,28 @@ export function enqueue(fileId, { fast = false, front = false } = {}) {
   setImmediate(work);
 }
 
-function ffmpeg(input, output) {
-  return new Promise((resolve, reject) => {
-    const p = spawn('ffmpeg', ['-hide_banner', '-loglevel', 'error', '-y', '-i', input, '-ac', '1', '-ar', '16000', '-c:a', 'pcm_s16le', output]);
+function run(cmd, args) {
+  return new Promise((resolve) => {
     let err = '';
-    p.stderr.on('data', (d) => { err += d; });
-    p.on('error', reject);
-    p.on('close', (code) => (code === 0 ? resolve() : reject(new Error(`ffmpeg: ${err.trim().slice(0, 300) || code}`))));
+    const p = spawn('nice', ['-n', '10', cmd, ...args], { stdio: ['ignore', 'ignore', 'pipe'] });
+    p.stderr.on('data', (d) => { err = (err + d).slice(-4000); });
+    p.on('error', (e) => resolve({ code: -1, err: e.message }));
+    p.on('close', (code) => resolve({ code, err }));
   });
 }
 
-async function ensureModel(model) {
-  // speaches lädt Modelle erst nach ausdrücklicher Anforderung herunter (einmalig, ~1,6 GB für large-v3-turbo)
-  const r = await fetch(`${WHISPER_URL}/v1/models/${model}`, { method: 'POST', signal: AbortSignal.timeout(30 * 60000) });
-  if (!r.ok && r.status !== 409) throw new Error(`Modell ${model} konnte nicht geladen werden (${r.status})`);
-}
-
-async function callWhisper(wav, model) {
-  const send = async () => {
-    const form = new FormData();
-    form.append('file', new Blob([fs.readFileSync(wav)], { type: 'audio/wav' }), 'aufnahme.wav');
-    form.append('model', model);
-    form.append('language', 'de');
-    form.append('response_format', 'json');
-    form.append('temperature', '0');
-    if (promptWords) form.append('prompt', promptWords);
-    return fetch(`${WHISPER_URL}/v1/audio/transcriptions`, { method: 'POST', body: form, signal: AbortSignal.timeout(30 * 60000) });
-  };
-  let r = await send();
-  if (r.status === 404 || r.status === 400) {
-    const body = await r.text();
-    if (/model|not found|download|installed/i.test(body)) { await ensureModel(model); r = await send(); }
-    else throw new Error(`Whisper ${r.status}: ${body.slice(0, 200)}`);
+async function whisper(wav, model, threads) {
+  const base = wav.replace(/\.wav$/, '');
+  const args = ['-m', model, '-f', wav, '-l', 'de', '-t', String(threads), '-oj', '-of', base, '-np'];
+  if (promptWords) args.push('--prompt', promptWords);
+  try {
+    const r = await run(BIN, args);
+    if (r.code !== 0) throw new Error(r.code === -1 ? 'whisper.cpp fehlt im Container' : `whisper.cpp: ${r.err.trim().split('\n').pop() || r.code}`);
+    const j = JSON.parse(fs.readFileSync(`${base}.json`, 'utf8'));
+    return (j.transcription || []).map((x) => String(x.text || '')).join('').replace(/\s+/g, ' ').trim();
+  } finally {
+    fs.rmSync(`${base}.json`, { force: true });
   }
-  if (!r.ok) throw new Error(`Whisper ${r.status}: ${(await r.text()).slice(0, 200)}`);
-  const j = await r.json();
-  return String(j.text || '').trim();
 }
 
 async function work() {
@@ -92,17 +145,23 @@ async function work() {
     const row = allRows().find((r) => r.id === fileId);
     const p = row && parsePayload(row);
     if (!p) throw new Error('Datei nicht gefunden');
-    await ffmpeg(storedPath(p), wav);
+    const c = config();
+    const name = s.fast ? c.modelFast : c.model;
+    s.status = findModel(name) ? 'running' : 'download';
+    const model = await ensureModel(name);
+    s.status = 'running';
+    const conv = await run('ffmpeg', ['-hide_banner', '-loglevel', 'error', '-y', '-i', storedPath(p), '-ac', '1', '-ar', '16000', '-c:a', 'pcm_s16le', wav]);
+    if (conv.code !== 0) throw new Error(`ffmpeg: ${conv.err.trim().split('\n').pop() || conv.code}`);
     const t0 = Date.now();
-    const model = s.fast ? MODEL_FAST : MODEL;
-    let text = await callWhisper(wav, model);
-    if (text === '') text = '(keine Sprache erkannt)';
-    append({ id: `tr-${fileId}`, kind: 'transcript', ref: fileId, device: 'Server', payload: { text, model, engine: 'whisper (lokal)', language: 'de', seconds: Math.round((Date.now() - t0) / 1000), automatic: true } });
+    let text = await whisper(wav, model, c.threads);
+    if (!text || /^\[(blank_audio|stille|musik)\]$/i.test(text)) text = '(keine Sprache erkannt)';
+    const seconds = Math.round((Date.now() - t0) / 1000);
+    append({ id: `tr-${fileId}`, kind: 'transcript', ref: fileId, device: 'Server', payload: { text, model: name, engine: 'whisper.cpp (lokal)', language: 'de', seconds, automatic: true } });
     state.delete(fileId);
-    kvSet('whisperLast', { at: new Date().toISOString(), ok: true, model, seconds: Math.round((Date.now() - t0) / 1000), audioSec: p.durationSec });
+    kvSet('whisperLast', { at: new Date().toISOString(), ok: true, model: name, seconds, audioSec: p.durationSec });
   } catch (e) {
-    s.status = 'error'; s.error = e.cause?.code === 'ECONNREFUSED' || /fetch failed/.test(e.message) ? 'Spracherkennung nicht erreichbar' : e.message;
-    kvSet('whisperLast', { at: new Date().toISOString(), ok: false, error: s.error });
+    s.status = 'error'; s.error = e.message;
+    kvSet('whisperLast', { at: new Date().toISOString(), ok: false, error: e.message });
   } finally {
     fs.rmSync(wav, { force: true });
     busy = false;
@@ -119,21 +178,32 @@ export function resumePending() {
   }
 }
 
-export async function serviceStatus() {
-  try {
-    const r = await fetch(`${WHISPER_URL}/v1/models`, { signal: AbortSignal.timeout(4000) });
-    const j = r.ok ? await r.json() : null;
-    return { reachable: r.ok, url: WHISPER_URL, model: MODEL, modelFast: MODEL_FAST, installed: (j?.data || []).map((m) => m.id), queue: queue.length, busy, last: kvGet('whisperLast') };
-  } catch (e) {
-    return { reachable: false, url: WHISPER_URL, model: MODEL, modelFast: MODEL_FAST, error: e.message, queue: queue.length, busy, last: kvGet('whisperLast') };
-  }
-}
-
-export async function preloadModels() {
-  for (const m of [MODEL_FAST, MODEL]) { try { await ensureModel(m); } catch (e) { console.warn(e.message); } }
-}
-
 export function retry(fileId) {
   const s = state.get(fileId);
   if (s?.status === 'error') { state.delete(fileId); enqueue(fileId, { fast: s.fast, front: true }); }
+}
+
+let binOk = null;
+async function binaryOk() {
+  if (binOk === null) { const r = await run(BIN, ['--help']); binOk = r.code === 0 || /usage/i.test(r.err); }
+  return binOk;
+}
+
+export async function serviceStatus() {
+  const c = config();
+  return {
+    engine: 'whisper.cpp', ready: await binaryOk(), ...c,
+    models: Object.fromEntries(Object.entries(MODELS).map(([k, m]) => {
+      const f = findModel(k);
+      return [k, { ...m, installed: !!f, shared: !!f && f.startsWith(SHARED_DIR) }];
+    })),
+    sharedDir: fs.existsSync(SHARED_DIR) ? SHARED_DIR : '', download: download && { ...download },
+    queue: queue.length, busy, last: kvGet('whisperLast'),
+  };
+}
+
+/** Gewählte Modelle vorab laden (im Hintergrund). */
+export async function preloadModels() {
+  const c = config();
+  for (const m of new Set([c.modelFast, c.model])) { try { await ensureModel(m); } catch (e) { console.warn(e.message); } }
 }

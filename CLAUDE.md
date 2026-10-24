@@ -12,8 +12,8 @@ Eigenständiges Projekt (nicht Teil von Flex-Studio). **Keine Passwörter, Token
 
 ## Architektur
 - Ein Image `ghcr.io/flexisticker/mlz-protokoll` (Node 22, Express 5, `node:sqlite`, Vue 3 + Vite + vite-plugin-pwa),
-  Port 8090, Volume `/data`. Zweiter Container **speaches** (Whisper, CPU) im Docker-Netz `mlz-net`, ohne Port nach außen.
-  Unraid-Vorlagen `unraid/*.xml`, Anleitung `docs/INSTALLATION-UNRAID.md`. Action `.github/workflows/docker.yml` (Tests + Build auf `main`).
+  Port 8090, Volume `/data`, optional `/models` = Whisper-Modelle der **Video-Zentrale** (`/mnt/user/appdata/video-zentrale/whisper`, nur lesend).
+  Seit 1.1.0 kein speaches-Container mehr. Unraid-Vorlage `unraid/mlz-protokoll.xml`, Anleitung `docs/INSTALLATION-UNRAID.md`. Action `.github/workflows/docker.yml` (Tests + Build auf `main`).
 - `shared/` wird von Server **und** Browser genutzt: `holidays.js` (alle Bundesländer, Ostern), `timeparse.js`
   (gesprochene Zeiten inkl. schwäbisch „viertel acht“ = 7:15), `worktime.js` (Soll/Ist, Pausen § 4 ArbZG, Urlaubskonto,
   BR-Ausgleich § 37 Abs. 3, Ausschlussfristen).
@@ -23,8 +23,12 @@ Eigenständiges Projekt (nicht Teil von Flex-Studio). **Keine Passwörter, Token
   Objekt-Arten (entry/absence/br/case) haben Beweis-ID = Objekt-ID (Doppelübertragung → idempotent).
 - Lesesicht `server/state.js` baut alles aus der Kette (Cache, bei jedem Anhängen verworfen) → `/api/state`.
 - Dateien `server/files.js`: Upload als Rohdaten mit `x-sha256` vom Handy (Abweichung → 422), Ablage `dateien/JJJJ/<id>.<ext>`, chmod 444.
-- Spracherkennung `server/transcribe.js`: ffmpeg → WAV 16 kHz → speaches `/v1/audio/transcriptions` (lädt Modell per
-  `POST /v1/models/<id>` nach). Diktat: large-v3-turbo, Arbeitszeit-Sätze: small (schnell). „Namen und Fachwörter“ → `prompt`.
+- Spracherkennung `server/transcribe.js`: **whisper.cpp v1.9.5** (gleicher Build wie Video-Zentrale, Dockerfile-Stufe `whisper`,
+  nur CPU) → ffmpeg WAV 16 kHz → `whisper-cli -m … -l de -t n -oj -of … -np [--prompt …]`. Modelle `ggml-<name>.bin`: erst `/models`,
+  dann `/data/whisper`; fehlende lädt MLZ von huggingface in den ersten beschreibbaren Ordner. Auswahl (kv `whisper` {model, modelFast,
+  threads}, Standard small/small/4) unter Prüfung → Spracherkennung, Route `PUT /api/transcribe/config`. Status `download` beim Laden.
+  Bewusst **nicht** über die Video-Zentrale (keine Schnittstelle dort, Warteschlange mit langen Videos, Rechenhelfer pausiert beim Zocken,
+  BR-Inhalte sollen nicht durch das Video-System). „Namen und Fachwörter“ → `--prompt`.
 - Zeitstempel `server/anchors.js`: `openssl ts` → FreeTSA + DigiCert (RFC 3161), nachts 23:30 und ~10 Min. nach neuen Einträgen;
   Tabelle `anchors` unveränderbar (außer `mailed_at`). Prüfwert-Mail `server/mail.js` (SMTP in kv, nicht in der Kette).
 - Export `server/export.js`: ZIP (bericht.pdf via pdfkit, daten.json, kette.json, dateien/, zeitstempel/, MANIFEST.sha256, verify.py/.sh).
@@ -36,19 +40,26 @@ Eigenständiges Projekt (nicht Teil von Flex-Studio). **Keine Passwörter, Token
   Sitzungen als Hash, Sperre 8 Fehlversuche/Std., CSRF-Kopf **`X-MLZ: 1`**. Notfall: `node server/reset-login.js <name>` in der Container-Konsole.
 
 ## Testen
-- `npm test` (13 Tests), `node test/mock-services.mjs` (Whisper-Attrappe :8099, Zeitstempeldienst :8098 mit eigener CA in `test/.tsa/`),
-  Server mit `WHISPER_URL=http://127.0.0.1:8099 TSA_URLS=http://127.0.0.1:8098/tsr TSA_CA_FILE=$PWD/test/.tsa/ca.crt WHISPER_PRELOAD=off`.
+- `npm test` (13 Tests), `node test/mock-services.mjs` (Zeitstempeldienst :8098 mit eigener CA in `test/.tsa/`), Spracherkennung per
+  `WHISPER_BIN=$PWD/test/fake-whisper.sh` (braucht eine – auch leere – Modelldatei `ggml-small.bin` in `MODEL_DIR` oder `DATA_DIR/whisper`),
+  Server mit `TSA_URLS=http://127.0.0.1:8098/tsr TSA_CA_FILE=$PWD/test/.tsa/ca.crt WHISPER_PRELOAD=off`.
+  Echtes whisper-cli lässt sich hier bauen (cmake/g++ vorhanden), Modelle von huggingface sind aus der Sandbox gesperrt.
 - Playwright (global, Chromium `/opt/pw-browsers`) mit `--use-fake-device-for-media-stream --use-fake-ui-for-media-stream` für das Mikrofon.
 - Getestet (24.10.2026): Einrichten, Stempeln, Diktat → Transkript → Festschreiben, Nachtrag, Arbeitszeit sprechen → Parser → Speichern,
   alle Seiten 390 px ohne Überlauf, offline Diktat + Festschreiben → später übertragen, Export + `verify.py` (alles in Ordnung), Trigger
   (UPDATE/DELETE abgelehnt), TOTP/Sperre/CSRF, Notfall-Reset, Produktions-Install (`npm ci --omit=dev`).
-- **Nicht getestet:** echter speaches-Container (Modellpfad/Download), echte FreeTSA/DigiCert (Sandbox gesperrt), Docker-Build (kein Daemon),
+- 1.1.0: whisper-cli 1.9.5 hier gebaut (Optionen geprüft, Fehler „Modell defekt“ sauber gemeldet), Attrappe mit eingehängtem Modell-Ordner,
+  Modellwechsel mit gesperrtem Download → verständliche Fehlermeldung + „Erneut“.
+- **Nicht getestet:** echte Erkennung mit echtem Modell (huggingface gesperrt), Rechenzeit auf dem Xeon, echte FreeTSA/DigiCert (Sandbox gesperrt), Docker-Build (kein Daemon),
   echtes Android-Handy (Mikrofon, Installation, Passkey), Gmail-Versand, rclone.
 
 ## Versionen
 - **1.0.0 (24.10.2026):** Erstausgabe mit allen Funktionen oben.
+- **1.1.0 (24.10.2026):** Spracherkennung mit eingebautem whisper.cpp statt speaches; Modelle der Video-Zentrale werden mitbenutzt;
+  Modellwahl in der App.
 
 ## Offene Punkte / Ideen
-- Nach der Installation: Erkennungsdauer auf dem Xeon messen (large-v3-turbo); falls zu langsam → `WHISPER_MODEL` auf medium/small.
+- Nach der Installation: Erkennungsdauer auf dem Xeon messen; bei guter Zeit Diktat-Modell auf `large-v3-turbo-q5_0` stellen.
+  Später möglich: CUDA-Build wie in der Video-Zentrale (GTX 1050 Ti mitnutzen) – macht das Image deutlich größer.
 - Optional: qualifizierter eIDAS-Zeitstempel (kostenpflichtig) über `TSA_URLS`; Dateien zusätzlich mit AES-GCM verschlüsseln;
   Ollama für Zeitsätze, die der Regel-Parser nicht versteht.
