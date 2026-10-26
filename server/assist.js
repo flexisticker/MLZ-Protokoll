@@ -1,12 +1,13 @@
 // KI-Ausfüllhilfe: aus dem gesprochenen Text einen ausgefüllten Entwurf machen.
 // Standard: lokal über Ollama (nichts verlässt den Server). Optional: Claude (Anthropic) – nur nach ausdrücklichem Einschalten.
 // Der Vorschlag der KI wird als eigener Eintrag „assist“ in die Beweiskette geschrieben; festgeschrieben wird erst nach Prüfung.
+import crypto from 'node:crypto';
 import Anthropic from '@anthropic-ai/sdk';
 import { db, kvGet, kvSet } from './db.js';
 import { append, getRow, parsePayload } from './evidence.js';
 import { transcriptOf } from './transcribe.js';
 import { CATEGORIES } from '../shared/categories.js';
-import { ENTRY_FIELDS, SCHEMA, combineSpoken, extractWhen, normalize, systemPrompt, userPrompt } from '../shared/assist.js';
+import { ENTRY_FIELDS, NOTE_SCHEMA, SCHEMA, combineSpoken, extractWhen, normalize, notesPrompt, notesUserPrompt, systemPrompt, userPrompt } from '../shared/assist.js';
 import { parseWorkTime } from '../shared/timeparse.js';
 
 const CLAUDE_MODEL = 'claude-opus-5-5';
@@ -74,12 +75,12 @@ export async function pullModel() {
   return pull;
 }
 
-async function runOllama(text, now) {
+async function runOllama(text, now, { system = systemPrompt(CATEGORIES), user = userPrompt(text, now), schema = SCHEMA } = {}) {
   const c = config();
   const r = await ollama('/api/chat', {
-    model: c.ollamaModel, stream: false, format: SCHEMA,
+    model: c.ollamaModel, stream: false, format: schema,
     options: { temperature: 0, num_ctx: 8192 },
-    messages: [{ role: 'system', content: systemPrompt(CATEGORIES) }, { role: 'user', content: userPrompt(text, now) }],
+    messages: [{ role: 'system', content: system }, { role: 'user', content: user }],
   });
   const body = await r.text();
   if (r.status === 404 && /not found/i.test(body)) { pullModel(); throw new Error(`Modell ${c.ollamaModel} fehlt in Ollama – wird jetzt geladen, danach „Erneut“`); }
@@ -89,7 +90,7 @@ async function runOllama(text, now) {
 }
 
 // ------------------------------------------------------------ Claude (optional)
-async function runClaude(text, now) {
+async function runClaude(text, now, { system = systemPrompt(CATEGORIES), user = userPrompt(text, now), schema = SCHEMA } = {}) {
   const c = config();
   if (!c.claudeKey) throw new Error('Claude-Schlüssel fehlt (Einstellungen → KI-Ausfüllhilfe)');
   const client = new Anthropic({ apiKey: c.claudeKey, baseURL: process.env.CLAUDE_BASE_URL || undefined, timeout: 5 * 60000 });
@@ -100,9 +101,9 @@ async function runClaude(text, now) {
       max_tokens: 16000,
       betas: ['server-side-fallback-2026-07-01'],
       fallbacks: 'default',
-      output_config: { effort: 'low', format: { type: 'json_schema', schema: SCHEMA } },
-      system: systemPrompt(CATEGORIES),
-      messages: [{ role: 'user', content: userPrompt(text, now) }],
+      output_config: { effort: 'low', format: { type: 'json_schema', schema } },
+      system,
+      messages: [{ role: 'user', content: user }],
     });
   } catch (e) {
     if (e instanceof Anthropic.AuthenticationError) throw new Error('Claude-Schlüssel ungültig');
@@ -189,14 +190,16 @@ async function runFor(id) {
   if (c.engine === 'off') { setStatus(id, { status: 'off' }); return; }
   // alle Aufnahmen des Entwurfs müssen erkannt sein
   const audio = (d.fileIds || []).filter((f) => { const r = getRow(f); return r && r.kind === 'file' && parsePayload(r)?.purpose?.includes('audio'); });
-  const texts = audio.map((f) => transcriptOf(f)?.text);
+  const texts = d.source?.text && !audio.length ? [d.source.text] : audio.map((f) => transcriptOf(f)?.text);
   if (texts.some((t) => t == null)) { setStatus(id, { status: 'transcribing' }); return; }
   const spoken = combineSpoken(texts);
   if (!spoken.trim()) { setStatus(id, { status: 'error', error: 'Keine Sprache erkannt – bitte nochmal sprechen' }); return; }
   setStatus(id, { status: 'running', engine: c.engine, startedAt: new Date().toISOString() });
-  const now = localNow();
+  // Notiz aus der alten Zeiterfassung: „heute“ ist der Tag der Notiz
+  const now = d.source?.date ? `${d.source.date}T${d.source.end || '18:00'}` : localNow();
+  const opts = d.source?.date ? { user: userPrompt(spoken, now, `Die Notiz stammt aus der Zeiterfassung dieses Tages${d.source.start ? ` (Arbeitszeit ${d.source.start}–${d.source.end})` : ''}. Sie ist schriftlich, nicht gesprochen. Wähle kind = ${d.section === 'br' ? 'br' : 'incident'} oder br.`) } : {};
   const t0 = Date.now();
-  const out = c.engine === 'claude' ? await runClaude(spoken, now) : await runOllama(spoken, now);
+  const out = c.engine === 'claude' ? await runClaude(spoken, now, opts) : await runOllama(spoken, now, opts);
   const n = normalize(out.result, now);
   // Zeitpunkt nicht erkannt? Feste Regeln (letzte Aufnahme mit Zeitangabe gewinnt)
   if ((n.kind === 'incident' || n.kind === 'br') && !n.fields.eventAt) {
@@ -217,7 +220,7 @@ async function runFor(id) {
     }
   }
   const seconds = Math.round((Date.now() - t0) / 1000);
-  const { row } = append({ kind: 'assist', ref: id, device: 'Server', payload: { draftId: id, fileIds: audio, engine: out.engine, model: out.model, seconds, kind: n.kind, result: n } });
+  const { row } = append({ kind: 'assist', ref: id, device: 'Server', payload: { draftId: id, fileIds: audio, ...(d.source ? { source: d.source } : {}), engine: out.engine, model: out.model, seconds, kind: n.kind, result: n } });
   // Ergebnis in den Entwurf (nur Felder, die noch leer sind oder noch vom vorigen KI-Vorschlag stammen)
   const cur = getDraft(id);
   if (!cur) return;
@@ -232,6 +235,64 @@ async function runFor(id) {
   cur.suggestion = { kind: n.kind, time: n.time, absence: n.absence, brtime: n.brtime, spoken };
   cur.assist = { status: 'done', engine: out.engine, model: out.model, kind: n.kind, missing: n.missing, evidenceId: row.id, seconds, updatedAt: new Date().toISOString() };
   putDraft(cur);
+}
+
+// ------------------------------------------------------------ Notizen aus importierter Zeiterfassung
+let noteJob = null; // { id, status running|done|error, done, total, results: { n: {kind, reason} }, error, engine, model }
+/** KI entscheidet je Notiz, ob sie ins Logbuch gehört (läuft im Hintergrund, Abfrage über noteJobStatus). */
+export function classifyNotes(list) {
+  const c = config();
+  if (c.engine === 'off') throw Object.assign(new Error('KI-Ausfüllhilfe ist aus (Einstellungen → KI-Ausfüllhilfe)'), { status: 400 });
+  if (noteJob?.status === 'running') throw Object.assign(new Error('Die KI prüft gerade schon Notizen'), { status: 409 });
+  const items = (Array.isArray(list) ? list : []).slice(0, 2000).map((x, i) => ({ n: Number(x.n ?? i), date: String(x.date || '').slice(0, 10), start: String(x.start || '').slice(0, 5), end: String(x.end || '').slice(0, 5), note: String(x.note || '').slice(0, 1500) })).filter((x) => x.note.trim());
+  noteJob = { id: crypto.randomUUID(), status: 'running', done: 0, total: items.length, results: {}, error: '', engine: c.engine };
+  const job = noteJob;
+  (async () => {
+    try {
+      for (let i = 0; i < items.length; i += 15) {
+        const batch = items.slice(i, i + 15);
+        const opts = { system: notesPrompt(), user: notesUserPrompt(batch), schema: NOTE_SCHEMA };
+        const out = c.engine === 'claude' ? await runClaude('', '', opts) : await runOllama('', '', opts);
+        job.model = out.model;
+        for (const r of out.result?.items || []) {
+          if (!batch.some((b) => b.n === r.n)) continue;
+          job.results[r.n] = { kind: ['incident', 'br'].includes(r.kind) ? r.kind : 'none', reason: String(r.reason || '').slice(0, 300) };
+        }
+        job.done = Math.min(items.length, i + batch.length);
+      }
+      job.status = 'done';
+    } catch (e) { job.status = 'error'; job.error = e.message; }
+  })();
+  return noteJob;
+}
+export const noteJobStatus = () => noteJob;
+
+/** Ausgewählte Notizen als Entwürfe anlegen – festgeschrieben wird erst nach eigener Prüfung. */
+export function draftsFromNotes(items, { fileId = '', fileName = '', fileMeta = null } = {}) {
+  const off = config().engine === 'off';
+  const ids = [];
+  for (const x of (Array.isArray(items) ? items : []).slice(0, 500)) {
+    const date = /^\d{4}-\d\d-\d\d$/.test(x.date || '') ? x.date : '';
+    const note = String(x.note || '').trim().slice(0, 4000);
+    if (!date || !note) continue;
+    const id = `imp-n-${date.replace(/-/g, '')}-${crypto.createHash('sha256').update(note).digest('hex').slice(0, 10)}`;
+    if (getDraft(id)) { ids.push(id); continue; }
+    const start = /^\d\d:\d\d$/.test(x.start || '') ? x.start : '';
+    const end = /^\d\d:\d\d$/.test(x.end || '') ? x.end : '';
+    const d = {
+      id, entryId: crypto.randomUUID(), section: x.kind === 'br' ? 'br' : 'incident', createdAt: new Date().toISOString(),
+      eventAt: `${date}T${start || '12:00'}`, eventAtAuto: true, eventEnd: '', title: '', category: '', location: '', persons: '', witnesses: '',
+      facts: off ? note : '', quotes: '', consequences: '', reaction: '', assessment: '',
+      delayReason: `Nachträglich übernommen aus meiner Notiz in der früheren Zeiterfassungs-App ibuchron (Tag ${date.split('-').reverse().join('.')}${fileName ? `, Datei ${fileName}` : ''}).`,
+      caseId: '', fileIds: fileId ? [fileId] : [], files: fileId && fileMeta ? { [fileId]: fileMeta } : {}, applied: [],
+      source: { kind: 'csv-note', text: note, date, start, end, fileId, line: Number(x.line) || null, aiReason: String(x.reason || '').slice(0, 300) },
+      assistWanted: !off, assist: { status: off ? 'off' : 'queued', updatedAt: new Date().toISOString() },
+    };
+    putDraft(d);
+    if (!off) enqueue(id);
+    ids.push(id);
+  }
+  return ids;
 }
 
 export const status = () => ({ ...publicConfig(), queue: queue.length, busy, pull: pull && { ...pull } });

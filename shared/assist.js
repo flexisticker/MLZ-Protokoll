@@ -162,3 +162,24 @@ export function aiSummary(d) {
   for (const f of Object.keys(ai)) (d[f] === ai[f] ? kept : edited).push(f);
   return { kept, edited };
 }
+
+// ------------------------------------------------------------ Notizen aus importierter Zeiterfassung
+/** Antwortformat: je Notiz, ob sie ins Logbuch gehört. */
+export const NOTE_SCHEMA = obj({
+  items: { type: 'array', items: obj({ n: { type: 'integer' }, kind: { type: 'string', enum: ['incident', 'br', 'none'] }, reason: str }) },
+});
+export function notesPrompt() {
+  return [
+    'Du hilfst einem Arbeitnehmer, der auch Betriebsratsmitglied ist (BR = Betriebsrat), alte Notizen aus seiner Zeiterfassung zu sichten.',
+    'Entscheide je Notiz, ob daraus ein Eintrag im Beweis-Logbuch werden sollte:',
+    '- incident = Auffälligkeit im Beruf: Druck, Mehrarbeit wegen Überlastung, fehlende Zeit, Anweisungen, Konflikte, Gesundheit, Benachteiligung,',
+    '  unklare oder kurzfristige Aufträge, Probleme mit Vorgesetzten, Kunden oder Abläufen, die der Arbeitnehmer später belegen möchte.',
+    '- br = Betriebsratsangelegenheit: Behinderung der BR-Arbeit, Mitbestimmung, Gespräche als BR. Reine BR-Schulungen oder Sitzungen ohne Problem = none.',
+    '- none = nur Tätigkeit, Ort oder Ereignis ohne Auffälligkeit (z. B. „KickOff Tag1“, „Messe“, „Urkunde 15 Jahre“, „Schulung“).',
+    'Im Zweifel incident, wenn die Notiz eine Begründung, Belastung oder ein Problem nennt („keine Zeit“, „musste“, „wieder“, „ohne Absprache“).',
+    '"reason": ein kurzer Satz, warum. Antworte für JEDE Notiz mit ihrer Nummer n.',
+  ].join('\n');
+}
+export function notesUserPrompt(list) {
+  return ['Notizen (Nummer | Datum | Arbeitszeit | Notiz):', ...list.map((x) => `${x.n} | ${x.date} | ${x.start && x.end ? `${x.start}–${x.end}` : '-'} | ${String(x.note).replace(/\s+/g, ' ').slice(0, 1500)}`)].join('\n');
+}

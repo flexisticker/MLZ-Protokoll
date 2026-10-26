@@ -203,6 +203,12 @@ const setNow = () => { d.value.eventAt = localNow(); d.value.eventAtAuto = false
       <small class="muted" style="display: block; margin-top: 6px">Zustände fotografieren (Aushang, Mangel, Dienstplan), keine Personen. Keine vertraulichen Firmenunterlagen abfotografieren.</small>
     </div>
 
+    <div v-if="d.source?.text" class="alert">
+      <small class="muted">Notiz aus der früheren Zeiterfassung (ibuchron) vom {{ d.source.date.split('-').reverse().join('.') }}<template v-if="d.source.start">, Arbeitszeit {{ d.source.start }}–{{ d.source.end }}</template>:</small><br />
+      „{{ d.source.text }}“
+      <div v-if="!String(d.facts || '').includes(d.source.text)" style="margin-top: 6px"><button class="btn small" @click="d.facts = [d.facts, d.source.text].filter(Boolean).join('\n')">In „Was ist passiert“ übernehmen</button></div>
+    </div>
+
     <div v-if="d.assistWanted && st" class="alert" :class="{ ok: st === 'done', bad: st === 'error', warn: suggestionKind }">
       <template v-if="st === 'upload'">⏳ Aufnahme wird hochgeladen …</template>
       <template v-else-if="st === 'transcribing'">⏳ Sprache wird erkannt …</template>

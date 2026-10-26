@@ -63,6 +63,7 @@ const hint = (r) => [r.holiday, r.half && `${r.half} ½`, r.absence && `${ABSENC
         </table>
       </div>
       <p style="margin-top: 10px"><b>Saldo gesamt bis heute: <span :class="totalBalance() < 0 ? 'neg' : 'pos'">{{ fmtDur(totalBalance(), true) }} Std.</span></b></p>
+      <router-link class="btn small" style="margin: 8px 0" to="/zeit/import">Alte Arbeitszeiten importieren (CSV)</router-link><br />
       <small class="muted">Tag antippen zum Erfassen oder Korrigieren. Korrekturen werden als neue Fassung gespeichert, die alte bleibt sichtbar.</small>
     </div>
 

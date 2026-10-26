@@ -57,12 +57,22 @@ http.createServer((req, res) => {
     if (req.url === '/api/chat') {
       if (body.model !== 'qwen2.5:7b-instruct') { res.writeHead(404); res.end(JSON.stringify({ error: `model "${body.model}" not found, try pulling it first` })); return; }
       const user = body.messages.find((m) => m.role === 'user').content;
-      setTimeout(() => res.end(JSON.stringify({ message: { role: 'assistant', content: JSON.stringify(fakeExtract(user)) }, done: true })), 1500);
+      const out = user.startsWith('Notizen (Nummer') ? fakeNotes(user) : fakeExtract(user);
+      setTimeout(() => res.end(JSON.stringify({ message: { role: 'assistant', content: JSON.stringify(out) }, done: true })), 1500);
       return;
     }
     res.writeHead(404); res.end('{}');
   });
 }).listen(8097, () => console.log('Ollama-Attrappe :8097'));
+
+// Notizen-Prüfung: „keine Zeit“, „musste“, „wieder“ → Auffälligkeit, „BR“ + Problem → Betriebsrat
+function fakeNotes(user) {
+  const items = user.split('\n').slice(1).map((l) => l.split(' | ')).filter((x) => x.length >= 4).map(([n, , , note]) => {
+    const prob = /keine zeit|musste|wieder|ohne absprache/i.test(note);
+    return { n: Number(n), kind: prob ? (/\bBR\b/.test(note) ? 'br' : 'incident') : 'none', reason: prob ? 'nennt Belastung/Problem' : 'nur Tätigkeit' };
+  });
+  return { items };
+}
 
 http.createServer((req, res) => {
   const chunks = [];
@@ -70,7 +80,8 @@ http.createServer((req, res) => {
   req.on('end', () => {
     if (req.headers['x-api-key'] !== 'sk-ant-test' && req.headers.authorization !== 'Bearer sk-ant-test') { res.writeHead(401, { 'content-type': 'application/json' }); res.end(JSON.stringify({ type: 'error', error: { type: 'authentication_error', message: 'invalid x-api-key' } })); return; }
     const body = JSON.parse(Buffer.concat(chunks).toString());
-    const out = fakeExtract(body.messages[0].content);
+    const u = body.messages[0].content;
+    const out = u.startsWith('Notizen (Nummer') ? fakeNotes(u) : fakeExtract(u);
     res.writeHead(200, { 'content-type': 'application/json' });
     res.end(JSON.stringify({ id: 'msg_test', type: 'message', role: 'assistant', model: body.model, content: [{ type: 'text', text: JSON.stringify(out) }], stop_reason: 'end_turn', usage: { input_tokens: 10, output_tokens: 10 } }));
   });

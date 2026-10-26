@@ -12,6 +12,7 @@ export const router = createRouter({
     { path: '/eintrag/:id', component: v('Entry'), meta: { title: 'Eintrag', tab: 'log', back: '/logbuch' } },
     { path: '/zeit', component: v('Time'), meta: { title: 'Arbeitszeit', tab: 'time' } },
     { path: '/zeit/tag/:date', component: v('Day'), meta: { title: 'Arbeitstag', tab: 'time', back: '/zeit' } },
+    { path: '/zeit/import', component: v('Import'), meta: { title: 'Import alter Arbeitszeiten', tab: 'time', back: '/zeit' } },
     { path: '/abwesenheit', component: v('Absences'), meta: { title: 'Urlaub & Abwesenheit', tab: 'time', back: '/zeit' } },
     { path: '/betriebsrat', component: v('Br'), meta: { title: 'BR-Tätigkeit', tab: 'more', back: '/mehr' } },
     { path: '/vorgaenge', component: v('Cases'), meta: { title: 'Vorgänge', tab: 'more', back: '/mehr' } },

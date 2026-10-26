@@ -18,6 +18,7 @@ import { anchorSoon, backupNow, fullCheck, localDay, startScheduler } from './sc
 import { sendMail, setSmtp, smtpPublic } from './mail.js';
 import { withDefaults } from '../shared/worktime.js';
 import { mergeAssist } from '../shared/assist.js';
+import { buildImport, decodeCsv, parseTimeCsv } from '../shared/importcsv.js';
 import * as assist from './assist.js';
 
 const ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
@@ -241,6 +242,44 @@ app.post('/api/evidence', wrap(async (req, res) => {
   if (kind === 'entry' && payload.draftId) db.prepare('DELETE FROM drafts WHERE id = ?').run(payload.draftId);
   if (kind === 'settings') tr.setPromptWords(payload.promptWords);
   res.json({ row });
+}));
+
+// ------------------------------------------------------------ Import alter Arbeitszeiten (CSV, z. B. aus ibuchron)
+// Die CSV liegt vorher als Datei in der Beweiskette (purpose „import“); der Server liest genau diese Datei.
+function importFile(fileId) {
+  const f = fileInfo(String(fileId || ''));
+  if (!f || f.erased || f.purpose !== 'import') throw bad('Importdatei nicht gefunden');
+  const text = decodeCsv(fs.readFileSync(storedPath(f)));
+  return { f, ...parseTimeCsv(text) };
+}
+app.post('/api/import/times', wrap(async (req, res) => {
+  const { f, rows, errors } = importFile(req.body?.fileId);
+  if (!rows.length) throw bad(errors[0] || 'Keine Tage in der Datei gefunden');
+  const st = build();
+  const plan = buildImport(rows, { times: st.times, absences: Object.values(st.absences), settings: withDefaults(st.settings), file: f.name, fileId: f.id });
+  const dev = device(req);
+  let times = 0, absences = 0;
+  for (const t of plan.times) {
+    const payload = { ...validate('time', null, t.payload), import: { fileId: f.id, file: f.name, line: t.payload.import.line } };
+    if (getRow(t.id)) continue;
+    append({ id: t.id, kind: 'time', eventAt: payload.date, device: dev, payload });
+    times++;
+  }
+  for (const a of plan.absences) {
+    const payload = { ...validate('absence', null, a.payload), import: { fileId: f.id, file: f.name, line: a.payload.import.line } };
+    if (getRow(a.id)) continue;
+    append({ id: a.id, kind: 'absence', eventAt: payload.from, device: dev, payload });
+    absences++;
+  }
+  res.json({ times, absences, skipped: plan.skipped, errors });
+}));
+app.post('/api/import/notes/classify', wrap(async (req, res) => res.json(assist.classifyNotes(req.body?.items))));
+app.get('/api/import/notes/classify', (req, res) => res.json(assist.noteJobStatus()));
+app.post('/api/import/notes/drafts', wrap(async (req, res) => {
+  const f = req.body?.fileId ? fileInfo(String(req.body.fileId)) : null;
+  if (req.body?.fileId && (!f || f.purpose !== 'import')) throw bad('Importdatei nicht gefunden');
+  const ids = assist.draftsFromNotes(req.body?.items, f ? { fileId: f.id, fileName: f.name, fileMeta: { purpose: 'import', mime: f.mime, size: f.size, name: f.name, sha256: f.sha256 } } : {});
+  res.json({ ids });
 }));
 
 // ------------------------------------------------------------ Dateien

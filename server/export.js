@@ -205,7 +205,7 @@ function buildPdf(sel, opts, info) {
         const d = days.get(r.date);
         const tm = st.times[r.date];
         const hint = [r.holiday, r.half && `${r.half} (halber Tag)`, r.absence && `${ABSENCE_TYPES[r.absence.type]?.label || r.absence.type}${r.absence.half ? ' (halber Tag)' : ''}`,
-          tm?.overtime?.orderedBy && `Mehrarbeit ${tm.overtime.how || 'angeordnet'} von ${tm.overtime.orderedBy}`, tm?.note, d?.open && `offen seit ${d.open}`, ...r.warnings].filter(Boolean).join('; ');
+          tm?.overtime?.orderedBy && `Mehrarbeit ${tm.overtime.how || 'angeordnet'} von ${tm.overtime.orderedBy}`, tm?.import && 'Import aus früherer Zeiterfassung', tm?.note, d?.open && `offen seit ${d.open}`, ...r.warnings].filter(Boolean).join('; ');
         if (r.untracked || (!d?.segments?.length && !r.target && !r.credit && !hint)) continue;
         rowOut([de(r.date), WD[weekday(r.date)], (d?.segments || []).map((x) => `${x.start}–${x.end}`).join(', '), r.gross ? `${r.breakTaken}` : '', r.worked ? fmtDur(r.worked) : '', fmtDur(r.target), fmtDur(r.balance, true), hint]);
       }

@@ -59,7 +59,7 @@ Eigenständiges Projekt (nicht Teil von Flex-Studio). **Keine Passwörter, Token
   192.168.3.0/24 in der Access List. Details `docs/INSTALLATION-UNRAID.md` Abschnitt 5.
 
 ## Testen
-- `npm test` (19 Tests), `node test/mock-services.mjs` (Zeitstempeldienst :8098 mit eigener CA in `test/.tsa/`, Ollama-Attrappe :8097,
+- `npm test` (22 Tests), `node test/mock-services.mjs` (Zeitstempeldienst :8098 mit eigener CA in `test/.tsa/`, Ollama-Attrappe :8097,
   Claude-Attrappe :8096 mit `CLAUDE_BASE_URL=http://127.0.0.1:8096`, Schlüssel `sk-ant-test`), Spracherkennung per
   `WHISPER_BIN=$PWD/test/fake-whisper.sh` (Text über `FAKE_WHISPER_TEXT_FILE`; braucht eine – auch leere – Modelldatei `ggml-small.bin` in `MODEL_DIR` oder `DATA_DIR/whisper`),
   Server mit `TSA_URLS=http://127.0.0.1:8098/tsr TSA_CA_FILE=$PWD/test/.tsa/ca.crt WHISPER_PRELOAD=off`.
@@ -94,6 +94,22 @@ Eigenständiges Projekt (nicht Teil von Flex-Studio). **Keine Passwörter, Token
   der Browser so „Wann?“, „bis“ und einen Kurztitel (`titleFrom`, erster Satz) – markiert „aus Text“ (`autoFields`), KI-Felder „KI“.
   Entwurf zeigt unter „Wann?“ Aufnahmezeit (Handy, erste Anlage `capturedAt`), Eingang beim Server und Abstand zum Geschehen;
   „Grund für spätere Erfassung“ richtet sich jetzt nach der Aufnahmezeit. Eintragsseite: Geschehen / aufgenommen / festgeschrieben, Logbuch: „erfasst …“.
+- **1.5.0 (26.10.2026):** Import alter Arbeitszeiten aus **ibuchron** (CSV, Seite `/zeit/import`, Knopf unter Arbeitszeit).
+  `shared/importcsv.js`: Spalten per Kopfzeile (Tag;Datum;Kommen;Gehen;Projekt;Stunden;Überstunden;Pause;…;Notizen;Arbeitsort;Urlaub;Krankheit;
+  Feiertag;Abwesenheit;Freizeitausgleich;Jahresurlaub), „07:00Uhr“, „9 Std 20 Min“, Kennzeichen „1.0“/„0.5“, Trennzeichen ; / Tab / ,
+  UTF-8 oder Windows-1252, Summenzeilen „Summe“/„Gesamt“ nur zum Vergleich. Kommen/Gehen → `time` (source `import`, `import {fileId, file, line}`,
+  ID `imp-t-<datum>-<start>`), Urlaub/Krankheit/Abwesenheit/Freizeitausgleich → `absence` urlaub/krank/sonder/abbau (zusammenhängende Tage
+  zu einem Zeitraum, ID `imp-a-…`), ½ an Heiligabend/Silvester = Rest des Tages (ganzer Eintrag, zählt ½ Urlaubstag). Notiz mit „BR“
+  (= Betriebsrat) ohne Kommen/Gehen → `schulung` (Schulung/Seminar) bzw. `sonder`. Feiertage rechnet MLZ, Projekt ignoriert.
+  Vorhandene Tage/Abwesenheiten werden nie überschrieben (erneuter Import = 0). Ablauf: CSV als Datei `purpose: 'import'` (text/csv) in die
+  Kette → `POST /api/import/times {fileId}` (Server liest genau diese Datei, prüft mit `validate`). **Stundenstand:** ibuchron enthält einen
+  Übertrag aus der Software davor → Vorschlag Übertrag = Gesamt − Summe (Überstunden-Spalte) als `balanceStart` zum ersten Tag der Datei (änderbar),
+  Vergleich MLZ ↔ ibuchron (nur bis heute). **Notizen → Logbuch:** „KI entscheiden lassen“ (`POST/GET /api/import/notes/classify`, Hintergrund-Job,
+  15 Notizen je Anfrage, `NOTE_SCHEMA`/`notesPrompt` in shared/assist.js) hakt auffällige Notizen an; `POST /api/import/notes/drafts` legt
+  **Entwürfe** an (`source {kind csv-note, text, date, start, end, fileId, line}`, CSV als Anlage, Grund der späteren Erfassung vorbelegt),
+  KI füllt sie (runFor nimmt `source.text`, „heute“ = Tag der Notiz). Festschreiben erst nach Prüfung. Export-PDF: „Import aus früherer Zeiterfassung“.
+  Getestet: `test/import.test.mjs`, Playwright + Ollama-Attrappe (Vorschau, KI-Auswahl, Import, Entwurf, zweiter Import 0, Export + verify.py).
+  **Nicht getestet:** echte vollständige ibuchron-Datei (nur Muster/Ausschnitte des Kunden), echtes Ollama bei vielen Notizen (Dauer).
 
 ## Offene Punkte / Ideen
 - Nach der Installation: Erkennungsdauer auf dem Xeon messen; bei guter Zeit Diktat-Modell auf `large-v3-turbo-q5_0` stellen.

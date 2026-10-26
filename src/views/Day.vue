@@ -192,7 +192,7 @@ const stampLabel = { in: 'Beginn', out: 'Ende', 'break-start': 'Pause', 'break-e
     <div v-if="stamps.length || existing" class="card">
       <h3>Bisher</h3>
       <p v-if="stamps.length" class="muted">Stempelungen: <span v-for="s in stamps" :key="s.evidenceId" style="margin-right: 8px">{{ stampLabel[s.type] }} {{ s.at.slice(11, 16) }}</span></p>
-      <p v-if="existing" class="muted">Gespeicherte Fassung vom {{ deTime(existing.receivedAt) }}: {{ existing.segments.map((s) => `${s.start}–${s.end}`).join(', ') }}, Pause {{ existing.breakMinutes }} Min.<template v-if="existing.history?.length"> · {{ existing.history.length }} frühere Fassung(en)</template></p>
+      <p v-if="existing" class="muted">Gespeicherte Fassung vom {{ deTime(existing.receivedAt) }}: {{ existing.segments.map((s) => `${s.start}–${s.end}`).join(', ') }}, Pause {{ existing.breakMinutes }} Min.<template v-if="existing.import"> · importiert aus {{ existing.import.file }} (Zeile {{ existing.import.line }})</template><template v-if="existing.history?.length"> · {{ existing.history.length }} frühere Fassung(en)</template></p>
       <small class="muted">Speichern legt eine neue Fassung an – die bisherigen bleiben in der Beweiskette erhalten.</small>
     </div>
 

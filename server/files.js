@@ -9,10 +9,10 @@ import { append, getRow, parsePayload } from './evidence.js';
 const EXT = {
   'audio/webm': 'webm', 'audio/ogg': 'ogg', 'audio/mp4': 'm4a', 'audio/aac': 'aac', 'audio/mpeg': 'mp3', 'audio/wav': 'wav', 'audio/x-wav': 'wav',
   'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'image/heic': 'heic', 'image/heif': 'heif', 'image/gif': 'gif',
-  'application/pdf': 'pdf',
+  'application/pdf': 'pdf', 'text/csv': 'csv',
 };
-const LIMIT = { audio: 150e6, photo: 60e6, attachment: 200e6 };
-export const PURPOSES = ['audio', 'time-audio', 'photo', 'attachment'];
+const LIMIT = { audio: 150e6, photo: 60e6, attachment: 200e6, import: 20e6 };
+export const PURPOSES = ['audio', 'time-audio', 'photo', 'attachment', 'import'];
 
 const baseMime = (m) => String(m || '').split(';')[0].trim().toLowerCase();
 const safeId = (s) => /^[A-Za-z0-9-]{8,64}$/.test(String(s || ''));
@@ -35,6 +35,7 @@ export async function receiveUpload(req, device) {
   if (!ext) throw Object.assign(new Error(`Dateityp ${mime || '?'} wird nicht angenommen`), { status: 415 });
   if (purpose.includes('audio') && !mime.startsWith('audio/')) throw Object.assign(new Error('Keine Tondatei'), { status: 415 });
   if (purpose === 'photo' && !mime.startsWith('image/')) throw Object.assign(new Error('Kein Bild'), { status: 415 });
+  if ((purpose === 'import') !== (mime === 'text/csv')) throw Object.assign(new Error('CSV nur als Import'), { status: 415 });
 
   const existing = getRow(id);
   if (existing) { req.resume(); return { row: existing, duplicate: true }; }
