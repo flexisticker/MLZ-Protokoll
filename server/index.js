@@ -148,7 +148,7 @@ app.delete('/api/me/passkeys/:id', (req, res) => { pk.removePasskey(req.user.id,
 // ------------------------------------------------------------ Daten
 app.get('/api/state', (req, res) => res.json({ ...clientState(), head: head(), today: localDay() }));
 
-const CLIENT_KINDS = ['entry', 'addendum', 'retract', 'time', 'stamp', 'absence', 'absence-cancel', 'br', 'br-cancel', 'claim', 'case', 'case-close', 'case-reopen', 'settings'];
+const CLIENT_KINDS = ['entry', 'addendum', 'retract', 'time', 'stamp', 'absence', 'absence-cancel', 'br', 'br-cancel', 'claim', 'case', 'case-close', 'case-reopen', 'settings', 'assessment', 'assessment-cancel'];
 const ID_RE = /^[A-Za-z0-9-]{8,64}$/;
 const DATE_RE = /^\d{4}-\d\d-\d\d$/;
 const TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
@@ -210,6 +210,19 @@ function validate(kind, ref, p) {
     case 'case':
       if (!ID_RE.test(p.id || '') || !str(p.title).trim()) throw bad('Titel fehlt');
       return { id: p.id, title: str(p.title, 200), description: str(p.description, 4000), category: str(p.category, 80) };
+    case 'assessment': {
+      // eigene Einschätzung zu Verstößen (z. B. „Vorgesetzter hat es billigend in Kauf genommen“) – als Aussage mit Begründung
+      if (!ID_RE.test(p.id || '')) throw bad('Kennung fehlt');
+      const dates = [...new Set((Array.isArray(p.dates) ? p.dates : []).filter((d) => DATE_RE.test(d)))].sort().slice(0, 4000);
+      if (!dates.length) throw bad('Keine Tage ausgewählt');
+      if (!str(p.basis).trim()) throw bad('Bitte begründen, woran man das erkennt');
+      return {
+        id: p.id, dates, codes: (Array.isArray(p.codes) ? p.codes : []).map((c) => str(c, 20)).slice(0, 20), scope: str(p.scope, 20),
+        how: ['gebilligt', 'geduldet', 'angeordnet', 'bekannt'].includes(p.how) ? p.how : 'gebilligt', person: str(p.person, 200),
+        text: str(p.text, 4000), basis: str(p.basis, 4000), evidence: str(p.evidence, 2000),
+      };
+    }
+    case 'assessment-cancel': if (!st.assessments?.[ref]) throw bad('Einschätzung nicht gefunden'); return { reason: str(p.reason, 1000) };
     case 'case-close': case 'case-reopen':
       if (!st.cases[ref]) throw bad('Vorgang nicht gefunden');
       return { date: DATE_RE.test(p.date || '') ? p.date : localDay(), note: str(p.note, 2000) };
@@ -235,9 +248,9 @@ app.post('/api/evidence', wrap(async (req, res) => {
   const existing = id && getRow(id);
   if (existing) return res.json({ row: existing, duplicate: true });
   const payload = validate(kind, ref, req.body.payload || {});
-  const eventAt = kind === 'entry' ? payload.eventAt : kind === 'time' ? payload.date : kind === 'stamp' ? payload.at : kind === 'br' ? `${payload.date}T${payload.start}` : kind === 'absence' ? payload.from : null;
-  const objId = ['entry', 'absence', 'br', 'case'].includes(kind) ? payload.id : id || crypto.randomUUID();
-  if (['entry', 'absence', 'br', 'case'].includes(kind) && getRow(objId)) return res.json({ row: getRow(objId), duplicate: true });
+  const eventAt = kind === 'entry' ? payload.eventAt : kind === 'time' ? payload.date : kind === 'stamp' ? payload.at : kind === 'br' ? `${payload.date}T${payload.start}` : kind === 'absence' ? payload.from : kind === 'assessment' ? payload.dates[0] : null;
+  const objId = ['entry', 'absence', 'br', 'case', 'assessment'].includes(kind) ? payload.id : id || crypto.randomUUID();
+  if (['entry', 'absence', 'br', 'case', 'assessment'].includes(kind) && getRow(objId)) return res.json({ row: getRow(objId), duplicate: true });
   const { row } = append({ id: objId, kind, ref, eventAt, capturedAt: capturedAt ? String(capturedAt).slice(0, 40) : null, device: device(req), payload });
   if (kind === 'entry' && payload.draftId) db.prepare('DELETE FROM drafts WHERE id = ?').run(payload.draftId);
   if (kind === 'settings') tr.setPromptWords(payload.promptWords);

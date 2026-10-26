@@ -26,7 +26,7 @@ export function build() {
   const rows = allRows();
   const out = {
     settings: withDefaults({}), settingsHistory: [], files: {}, transcripts: {}, entries: {}, times: {}, stamps: {},
-    absences: {}, br: {}, claims: [], cases: {}, erased: new Set(), firstDate: null, count: rows.length,
+    absences: {}, br: {}, claims: [], cases: {}, assessments: {}, erased: new Set(), firstDate: null, count: rows.length,
   };
   for (const r of rows) {
     if (r.kind === 'erase') out.erased.add(r.ref);
@@ -48,6 +48,8 @@ export function build() {
       case 'br': if (p?.id) { out.br[p.id] = { ...p, ...m, cancelled: null }; noteDate(out, p.date); } break;
       case 'br-cancel': if (out.br[r.ref] && p) out.br[r.ref].cancelled = { ...p, ...m }; break;
       case 'claim': if (p) out.claims.push({ ...p, ...m }); break;
+      case 'assessment': if (p?.id) out.assessments[p.id] = { ...p, ...m, cancelled: null }; break;
+      case 'assessment-cancel': if (out.assessments[r.ref] && p) out.assessments[r.ref].cancelled = { ...p, ...m }; break;
       case 'case': if (p?.id) out.cases[p.id] = { ...p, ...m, closed: null, history: [] }; break;
       case 'case-close': if (out.cases[r.ref] && p) { out.cases[r.ref].closed = { ...p, ...m }; out.cases[r.ref].history.push({ action: 'close', ...p, ...m }); } break;
       case 'case-reopen': if (out.cases[r.ref] && p) { out.cases[r.ref].closed = null; out.cases[r.ref].history.push({ action: 'reopen', ...p, ...m }); } break;
@@ -76,7 +78,7 @@ export function clientState() {
   const st = build();
   return {
     settings: st.settings, settingsHistory: st.settingsHistory.slice(-30), files: st.files, transcripts: st.transcripts, entries: st.entries,
-    times: st.times, stamps: st.stamps, absences: st.absences, br: st.br, claims: st.claims, cases: st.cases,
+    times: st.times, stamps: st.stamps, absences: st.absences, br: st.br, claims: st.claims, cases: st.cases, assessments: st.assessments,
     firstDate: st.firstDate, count: st.count,
   };
 }

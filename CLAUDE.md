@@ -59,7 +59,7 @@ Eigenständiges Projekt (nicht Teil von Flex-Studio). **Keine Passwörter, Token
   192.168.3.0/24 in der Access List. Details `docs/INSTALLATION-UNRAID.md` Abschnitt 5.
 
 ## Testen
-- `npm test` (22 Tests), `node test/mock-services.mjs` (Zeitstempeldienst :8098 mit eigener CA in `test/.tsa/`, Ollama-Attrappe :8097,
+- `npm test` (23 Tests), `node test/mock-services.mjs` (Zeitstempeldienst :8098 mit eigener CA in `test/.tsa/`, Ollama-Attrappe :8097,
   Claude-Attrappe :8096 mit `CLAUDE_BASE_URL=http://127.0.0.1:8096`, Schlüssel `sk-ant-test`), Spracherkennung per
   `WHISPER_BIN=$PWD/test/fake-whisper.sh` (Text über `FAKE_WHISPER_TEXT_FILE`; braucht eine – auch leere – Modelldatei `ggml-small.bin` in `MODEL_DIR` oder `DATA_DIR/whisper`),
   Server mit `TSA_URLS=http://127.0.0.1:8098/tsr TSA_CA_FILE=$PWD/test/.tsa/ca.crt WHISPER_PRELOAD=off`.
@@ -116,6 +116,14 @@ Eigenständiges Projekt (nicht Teil von Flex-Studio). **Keine Passwörter, Token
   (geplant, im Urlaubskonto als „+ geplant“). An Heiligabend/Silvester gibt es kein „halber Tag“: der Eintrag deckt den Rest des Tages (½ Urlaubstag),
   `save()` setzt `half` dort auf false (sonst würde nur ¼ Tag angerechnet). Link „halbe freie Tage festlegen“ → Einstellungen `#halbetage`
   (Router scrollt jetzt zu Ankern). Zahlen mit Komma (`num()` in util.js).
+- **1.7.0 (26.10.2026):** Verstöße gegen das Arbeitszeitgesetz hervorgehoben. `dayResult().violations[{code, law, text, severity bad|check}]`
+  (max10 § 3, break § 4, rest § 5, sunday/holiday § 9 = check), `lawViolations(rows)` + week60 (§ 3, > 60 Std./Woche) und avg48 (Halbjahr > 8 Std./Werktag,
+  check), `LAW_LABEL`. **Fehler behoben:** Ruhezeit wurde mit `first + 1440 - prevEnd` gerechnet (24 Std. zu viel) → § 5 wurde nie gemeldet; jetzt `first - prevEnd`.
+  UI: Hinweis oben auf Arbeitszeit, Monatstabelle rot markiert mit §, Tag zeigt Verstöße (inkl. Ruhezeit zum Vortag), Seite `/zeit/verstoesse` (Filter alle/Verstöße/
+  ibuchron/ohne Einschätzung, Auswahl, „Alle importierten auswählen“). **Einschätzung** = neue Beweisart `assessment` {id, dates[], codes[], scope import|manual,
+  how gebilligt|geduldet|angeordnet|bekannt, person, text, basis (Pflicht), evidence} + `assessment-cancel`. Wunsch Kunde: bei importierten Verstößen „Vorgesetzter
+  hat billigend in Kauf genommen“ → bewusst als **Aussage des Arbeitnehmers mit Begründung** („Nach meiner Einschätzung hat …“), nicht als Tatsache.
+  Export-PDF: Abschnitt „Verstöße gegen das Arbeitszeitgesetz“ (VERSTOSS/Prüfen, Import-Hinweis) + „Eigene Einschätzung“, Original-CSV des Imports im ZIP.
 
 ## Offene Punkte / Ideen
 - Nach der Installation: Erkennungsdauer auf dem Xeon messen; bei guter Zeit Diktat-Modell auf `large-v3-turbo-q5_0` stellen.

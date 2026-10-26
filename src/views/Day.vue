@@ -11,7 +11,7 @@ import { dayRow, stampsToDay } from '../services/derived.js';
 import { parseWorkTime } from '../../shared/timeparse.js';
 import { ABSENCE_TYPES, dayResult, fmtDur } from '../../shared/worktime.js';
 import { WEEKDAYS, de, deTime, today, fromB64 } from '../services/util.js';
-import { weekday } from '../../shared/holidays.js';
+import { addDays, weekday } from '../../shared/holidays.js';
 
 const route = useRoute();
 const router = useRouter();
@@ -113,7 +113,8 @@ function live() {
 const preview = computed(() => {
   if (!f.value) return null;
   const segs = f.value.segments.filter((s) => s.start && s.end);
-  return dayResult(date.value, settings(), { segments: segs, breakMinutes: Number(f.value.breakMinutes) || 0 }, Object.values(store.data?.absences || {}).filter((a) => !a.cancelled));
+  const prev = store.data ? dayRow(addDays(date.value, -1)) : null; // für die Ruhezeit (§ 5 ArbZG)
+  return dayResult(date.value, settings(), { segments: segs, breakMinutes: Number(f.value.breakMinutes) || 0 }, Object.values(store.data?.absences || {}).filter((a) => !a.cancelled), prev?.last != null ? prev.last - 1440 : null);
 });
 const row = computed(() => (store.data ? dayRow(date.value) : null));
 const overtime = computed(() => preview.value && preview.value.balance > 0);
@@ -175,7 +176,10 @@ const stampLabel = { in: 'Beginn', out: 'Ende', 'break-start': 'Pause', 'break-e
         <div class="kpi"><b>{{ preview.breakTaken }}</b><span>Pause Min.</span></div>
         <div class="kpi"><b :class="preview.balance < 0 ? 'neg' : 'pos'">{{ fmtDur(preview.balance, true) }}</b><span>Saldo Tag</span></div>
       </div>
-      <div v-for="w in preview?.warnings || []" :key="w" class="alert warn" style="margin-top: 8px">{{ w }}</div>
+      <div v-for="x in preview?.violations || []" :key="x.code" class="alert" :class="x.severity === 'bad' ? 'bad' : 'warn'" style="margin-top: 8px">
+        <b>{{ x.severity === 'bad' ? 'Verstoß' : 'Prüfen' }} ({{ x.law }}):</b> {{ x.text }}
+        <router-link v-if="existing" to="/zeit/verstoesse" style="display: block; margin-top: 4px; font-size: .85rem">Festhalten, wer davon wusste →</router-link>
+      </div>
     </div>
 
     <div v-if="overtime || f.overtime.orderedBy" class="card">

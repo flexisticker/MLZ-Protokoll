@@ -11,7 +11,7 @@ import { storedPath } from './files.js';
 import { anchorFor, caFor, listAnchors } from './anchors.js';
 import { activeAbsences, activeBr, build, workDays } from './state.js';
 import { STATES, addDays, parseYmd, weekday } from '../shared/holidays.js';
-import { ABSENCE_TYPES, brAccount, claimDeadlines, fmtDur, monthBounds, range, trackingStart, vacationAccount } from '../shared/worktime.js';
+import { ABSENCE_TYPES, LAW_LABEL, brAccount, claimDeadlines, fmtDur, lawViolations, monthBounds, range, trackingStart, vacationAccount } from '../shared/worktime.js';
 
 const localToday = () => new Date().toLocaleString('sv-SE', { timeZone: process.env.TZ || 'Europe/Berlin' }).slice(0, 10);
 
@@ -57,7 +57,9 @@ function select({ from, to, parts, caseId }) {
       if (r.kind === 'stamp' && r.payload && inRange(JSON.parse(r.payload).at.slice(0, 10))) chosen.add(r.id);
       if (r.kind === 'claim' && r.payload) chosen.add(r.id);
       if (r.kind === 'settings' && r.payload) chosen.add(r.id);
+      if (r.kind === 'file' && r.payload && JSON.parse(r.payload).purpose === 'import') chosen.add(r.id); // Original-CSV importierter Zeiten
     }
+    for (const a of Object.values(st.assessments || {})) if (a.dates.some(inRange)) { chosen.add(a.evidenceId); if (a.cancelled) chosen.add(a.cancelled.evidenceId); }
     times.push(true);
   }
   const absences = parts.includes('absence') && !caseId ? activeAbsences(st).filter((a) => a.to >= from && a.from <= to) : [];
@@ -217,6 +219,34 @@ function buildPdf(sel, opts, info) {
     if (claims.length) {
       h2('Mehrarbeit und Geltendmachung');
       for (const c of claims) t(`${c.month}: Mehrarbeit ${fmtDur(c.overtime)} Std. · Frist ${de(c.deadline)} · ${c.claimed ? `geltend gemacht am ${de(c.claimed.date)} (${c.claimed.how || ''}${c.claimed.to ? ` bei ${c.claimed.to}` : ''})` : 'nicht geltend gemacht'}`);
+    }
+    // Verstöße gegen das Arbeitszeitgesetz
+    const all = range(opts.from, opts.to, s, days, abs, { start: trackingStart(s, st.firstDate), today: localToday() });
+    const viol = lawViolations(all, s);
+    const assess = Object.values(st.assessments || {}).filter((a) => !a.cancelled && a.dates.some((d) => d >= opts.from && d <= opts.to));
+    ensure(80);
+    h2(`Verstöße gegen das Arbeitszeitgesetz (${viol.length})`);
+    if (!viol.length) t('Im Zeitraum wurden keine Verstöße festgestellt.');
+    else {
+      const counts = {};
+      for (const v of viol) counts[v.code] = (counts[v.code] || 0) + 1;
+      small(`Automatisch aus den erfassten Zeiten ermittelt. ${Object.entries(counts).map(([k, n]) => `${LAW_LABEL[k] || k}: ${n}`).join(' · ')}. „Prüfen“ = nur mit Ausnahme/Ausgleich zulässig.`);
+      for (const v of viol) {
+        const tm = st.times[v.date];
+        const a = assess.find((x) => x.dates.includes(v.date));
+        t(`${de(v.date)}${v.week || v.period ? '' : ` (${WD[weekday(v.date)]})`}: ${v.severity === 'check' ? 'Prüfen – ' : 'VERSTOSS – '}${v.text} (${v.law})${tm?.import ? ' · Zeit aus früherer Zeiterfassung importiert' : ''}${tm?.overtime?.orderedBy ? ` · Mehrarbeit ${tm.overtime.how || 'angeordnet'} von ${tm.overtime.orderedBy}` : ''}${a ? ' · siehe eigene Einschätzung unten' : ''}`);
+      }
+    }
+    if (assess.length) {
+      h2('Eigene Einschätzung zu den Verstößen');
+      small('Aussage des Arbeitnehmers mit Begründung (keine automatische Feststellung).');
+      for (const a of assess) {
+        doc.font('Helvetica-Bold'); t(`Festgehalten am ${de(String(a.receivedAt || '').slice(0, 10))} · betrifft ${a.dates.length} Tag(e) von ${de(a.dates[0])} bis ${de(a.dates[a.dates.length - 1])}`); doc.font('Helvetica');
+        if (a.text) t(a.text);
+        t(`Begründung: ${a.basis}`);
+        if (a.evidence) t(`Belege: ${a.evidence}`);
+        small(`Tage: ${a.dates.map(de).join(', ')}`);
+      }
     }
   }
 

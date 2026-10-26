@@ -137,6 +137,7 @@ async function run() {
       <div style="margin-top: 8px" class="row">
         <router-link class="btn small" to="/zeit">Zur Arbeitszeit</router-link>
         <router-link v-if="result.drafts" class="btn small" to="/logbuch">Entwürfe prüfen</router-link>
+        <router-link class="btn small" to="/zeit/verstoesse">Verstöße ansehen</router-link>
       </div>
     </div>
 

@@ -66,3 +66,25 @@ test('Urlaubstag wird als Soll angerechnet', () => {
   const abbau = range('2026-08-03', '2026-08-03', s, new Map(), [{ type: 'abbau', from: '2026-08-03' }]);
   assert.equal(abbau[0].balance, -480);
 });
+
+test('Verstöße gegen das Arbeitszeitgesetz', async () => {
+  const { lawViolations } = await import('../shared/worktime.js');
+  const s = defaultSettings();
+  const days = new Map([
+    ['2026-03-02', { segments: [{ start: '06:00', end: '18:00' }], breakMinutes: 45 }], // 11:15 Std. > 10
+    ['2026-03-03', { segments: [{ start: '04:00', end: '12:00' }], breakMinutes: 0 }], // Ruhezeit 10 Std., Pause fehlt
+    ['2026-03-08', { segments: [{ start: '09:00', end: '12:00' }], breakMinutes: 0 }], // Sonntag
+  ]);
+  const rows = range('2026-03-02', '2026-03-08', s, days, []);
+  const v = lawViolations(rows, s);
+  const codes = v.map((x) => `${x.date} ${x.code}`);
+  assert.ok(codes.includes('2026-03-02 max10'));
+  assert.ok(codes.includes('2026-03-03 rest'));
+  assert.ok(codes.includes('2026-03-03 break'));
+  assert.ok(codes.includes('2026-03-08 sunday'));
+  assert.equal(v.find((x) => x.code === 'sunday').severity, 'check');
+  // Woche über 60 Std.
+  const long = new Map(['2026-03-09', '2026-03-10', '2026-03-11', '2026-03-12', '2026-03-13', '2026-03-14'].map((d) => [d, { segments: [{ start: '07:00', end: '18:15' }], breakMinutes: 45 }]));
+  const w = lawViolations(range('2026-03-09', '2026-03-15', s, long, []), s);
+  assert.ok(w.some((x) => x.code === 'week60'));
+});

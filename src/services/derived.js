@@ -1,7 +1,7 @@
 // Aus dem Serverstand abgeleitete Arbeitszeit-Daten (gleiche Regeln wie im PDF-Bericht).
 import { store, settings } from './store.js';
 import { today } from './util.js';
-import { balanceUntil, brAccount, claimDeadlines, range, trackingStart, vacationAccount } from '../../shared/worktime.js';
+import { balanceUntil, brAccount, claimDeadlines, range, trackingStart, vacationAccount, lawViolations } from '../../shared/worktime.js';
 
 export function stampsToDay(stamps) {
   const segs = [];
@@ -38,3 +38,11 @@ export const totalBalance = () => balanceUntil(today(), settings(), workDays(), 
 export const vacation = (year = Number(today().slice(0, 4))) => vacationAccount(year, settings(), activeAbsences(), today());
 export const brAcc = () => brAccount(activeBr(), activeAbsences(), settings(), workDays(), today());
 export const claims = () => claimDeadlines(settings(), workDays(), activeAbsences(), store.data?.claims || [], today(), store.data?.firstDate);
+
+/** Verstöße gegen das Arbeitszeitgesetz im Zeitraum (nur erfasste Tage bis heute). */
+export function violations(from, to) {
+  const t = today();
+  const until = to > t ? t : to;
+  if (until < from) return [];
+  return lawViolations(range(from, until, settings(), workDays(), activeAbsences(), { start: startDate(), today: t }), settings());
+}

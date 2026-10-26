@@ -100,7 +100,8 @@ export function dayResult(date, settings, day, absences = [], prevEnd = null) {
   if (type?.noTarget) target = Math.round(base * (1 - absFactor));
   const credit = type?.credit ? Math.round(base * absFactor) : 0;
 
-  const warnings = [];
+  const violations = [];
+  const v = (code, law, text, severity = 'bad') => violations.push({ code, law, text, severity });
   let gross = 0, breakTaken = 0, breakNeeded = 0, worked = 0, first = null, last = null;
   const segs = (day?.segments || []).map((s) => ({ a: hm(s.start), b: hm(s.end) })).filter((s) => s.a != null && s.b != null)
     .map((s) => (s.b <= s.a ? { a: s.a, b: s.b + 1440 } : s)).sort((x, y) => x.a - y.a);
@@ -114,15 +115,16 @@ export function dayResult(date, settings, day, absences = [], prevEnd = null) {
     worked = gross - inner;
     breakNeeded = requiredBreak(worked, settings.breakRules);
     if (breakTaken < breakNeeded) {
-      warnings.push(`Pause zu kurz: ${breakTaken} statt ${breakNeeded} Min. (§ 4 ArbZG)`);
+      v('break', '§ 4 ArbZG', `Pause zu kurz: ${breakTaken} statt mindestens ${breakNeeded} Min.`);
       if (settings.breakMode === 'auto') worked = gross - inner - (breakNeeded - breakTaken);
     }
-    if (worked > 600) warnings.push('Mehr als 10 Std. gearbeitet (§ 3 ArbZG)');
-    if (prevEnd != null && first + 1440 - prevEnd < 660) warnings.push('Ruhezeit unter 11 Std. (§ 5 ArbZG)');
-    if (weekday(date) === 6 || holiday) warnings.push(holiday ? `Arbeit am Feiertag (${holiday})` : 'Sonntagsarbeit');
+    if (worked > 600) v('max10', '§ 3 ArbZG', `${fmtDur(worked)} Std. gearbeitet – höchstens 10 Std. am Tag erlaubt`);
+    if (prevEnd != null && first - prevEnd < 660) v('rest', '§ 5 ArbZG', `Ruhezeit nur ${fmtDur(first - prevEnd)} Std. – mindestens 11 Std. vorgeschrieben`);
+    if (weekday(date) === 6 || holiday) v(holiday ? 'holiday' : 'sunday', '§ 9 ArbZG', holiday ? `Arbeit am Feiertag (${holiday}) – nur mit Ausnahme nach § 10 ArbZG erlaubt` : 'Sonntagsarbeit – nur mit Ausnahme nach § 10 ArbZG erlaubt', 'check');
   }
+  const warnings = violations.map((x) => `${x.text} (${x.law})`);
   const balance = worked + credit - target;
-  return { date, holiday, half: half?.name || '', base, target, credit, absence: abs, gross, breakTaken, breakNeeded, worked, balance, warnings, first, last };
+  return { date, holiday, half: half?.name || '', base, target, credit, absence: abs, gross, breakTaken, breakNeeded, worked, balance, warnings, violations, first, last };
 }
 
 /** Alle Tage eines Zeitraums [from, to] inklusive. */
@@ -140,6 +142,38 @@ export function range(from, to, settings, days, absences, opts = {}) {
   }
   return out;
 }
+
+/** Verstöße gegen das Arbeitszeitgesetz in einem Zeitraum (Tageswerte aus range()). Zusätzlich Wochen über 60 Std. (§ 3: 6 × 10 Std.)
+ *  und Halbjahre mit mehr als 8 Std. je Werktag im Schnitt (§ 3: Ausgleich auf 48 Std./Woche). */
+export function lawViolations(rows, settings) {
+  const out = [];
+  for (const r of rows) for (const x of r.violations || []) out.push({ date: r.date, ...x });
+  const weeks = new Map();
+  for (const r of rows) {
+    if (!r.worked) continue;
+    const mon = addDays(r.date, -weekday(r.date));
+    weeks.set(mon, (weeks.get(mon) || 0) + r.worked);
+  }
+  for (const [mon, min] of weeks) if (min > 3600) out.push({ date: mon, code: 'week60', law: '§ 3 ArbZG', severity: 'bad', week: true, text: `Woche ab ${mon.split('-').reverse().join('.')}: ${fmtDur(min)} Std. – mehr als 60 Std. sind nie zulässig` });
+  const halves = new Map();
+  for (const r of rows) {
+    const key = `${r.date.slice(0, 4)}-${Number(r.date.slice(5, 7)) <= 6 ? 'H1' : 'H2'}`;
+    const h = halves.get(key) || { worked: 0, werktage: 0, last: r.date, first: r.date };
+    h.worked += r.worked || 0;
+    if (weekday(r.date) < 6 && !r.holiday && !r.untracked && !r.future) h.werktage++;
+    h.last = r.date;
+    halves.set(key, h);
+  }
+  for (const [key, h] of halves) {
+    if (h.werktage < 20 || h.worked / h.werktage <= 480) continue;
+    out.push({ date: h.last, code: 'avg48', law: '§ 3 ArbZG', severity: 'check', period: key, text: `${key.endsWith('H1') ? '1.' : '2.'} Halbjahr ${key.slice(0, 4)}: im Schnitt ${fmtDur(Math.round(h.worked / h.werktage))} Std. je Werktag (Mo–Sa) – über 8 Std. (48-Std.-Woche); Ausgleich nötig` });
+  }
+  return out.sort((a, b) => a.date.localeCompare(b.date));
+}
+export const LAW_LABEL = {
+  max10: 'Über 10 Std. am Tag', break: 'Pause zu kurz', rest: 'Ruhezeit unter 11 Std.', sunday: 'Sonntagsarbeit', holiday: 'Feiertagsarbeit',
+  week60: 'Woche über 60 Std.', avg48: 'Schnitt über 48 Std./Woche',
+};
 
 export function monthBounds(year, month) {
   const from = `${year}-${String(month).padStart(2, '0')}-01`;

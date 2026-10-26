@@ -4,8 +4,8 @@ import { useRouter } from 'vue-router';
 import Icon from '../components/Icon.vue';
 import Modal from '../components/Modal.vue';
 import { queueEvidence, store, toast } from '../services/store.js';
-import { claims, monthRows, totalBalance, vacation, workDays } from '../services/derived.js';
-import { ABSENCE_TYPES, fmtDur } from '../../shared/worktime.js';
+import { claims, monthRows, totalBalance, vacation, violations, workDays } from '../services/derived.js';
+import { ABSENCE_TYPES, LAW_LABEL, fmtDur } from '../../shared/worktime.js';
 import { MONTHS, WEEKDAYS, de, deShort, today } from '../services/util.js';
 import { weekday } from '../../shared/holidays.js';
 
@@ -23,7 +23,9 @@ async function saveClaim() {
   claim.value = null;
   toast('Geltendmachung festgehalten');
 }
-const hint = (r) => [r.holiday, r.half && `${r.half} ½`, r.absence && `${ABSENCE_TYPES[r.absence.type]?.label.split(' ')[0] || ''}${r.absence.half ? ' ½' : ''}`, store.data?.times?.[r.date]?.overtime?.orderedBy && 'Mehrarbeit angeordnet', ...r.warnings.map(() => '⚠')].filter(Boolean).join(' · ');
+const hint = (r) => [r.holiday, r.half && `${r.half} ½`, r.absence && `${ABSENCE_TYPES[r.absence.type]?.label.split(' ')[0] || ''}${r.absence.half ? ' ½' : ''}`, store.data?.times?.[r.date]?.overtime?.orderedBy && 'Mehrarbeit angeordnet', ].filter(Boolean).join(' · ');
+const yearViol = computed(() => (store.data ? violations(`${ym.value.y}-01-01`, `${ym.value.y}-12-31`) : []));
+const hardViol = computed(() => yearViol.value.filter((v) => v.severity === 'bad').length);
 </script>
 
 <template>
@@ -33,6 +35,10 @@ const hint = (r) => [r.holiday, r.half && `${r.half} ½`, r.absence && `${ABSENC
       <router-link class="tile amber" to="/abwesenheit"><span class="ico"><Icon name="calendar" /></span>Urlaub &amp; Abwesenheit<small>{{ vacation().remaining }} Tage frei</small></router-link>
     </div>
 
+    <router-link v-if="yearViol.length" to="/zeit/verstoesse" class="alert plain-link" :class="hardViol ? 'bad' : 'warn'" style="display: block; text-decoration: none">
+      <b>⚠ {{ hardViol }} Verstöße gegen das Arbeitszeitgesetz in {{ ym.y }}</b><template v-if="yearViol.length > hardViol"> · {{ yearViol.length - hardViol }} zu prüfen</template><br />
+      <small>Ansehen und festhalten, wer davon wusste →</small>
+    </router-link>
     <div class="card">
       <div class="row between">
         <button class="btn small ghost" aria-label="Vormonat" @click="move(-1)"><Icon name="left" /></button>
@@ -48,12 +54,13 @@ const hint = (r) => [r.holiday, r.half && `${r.half} ½`, r.absence && `${ABSENC
         <table class="t">
           <thead><tr><th>Tag</th><th>Zeiten</th><th class="num">Ist</th><th class="num">Saldo</th><th /></tr></thead>
           <tbody>
-            <tr v-for="r in rows" :key="r.date" class="daycell" :class="{ we: weekday(r.date) >= 5, hol: r.holiday, today: r.date === t }" @click="router.push(`/zeit/tag/${r.date}`)">
+            <tr v-for="r in rows" :key="r.date" class="daycell" :class="{ we: weekday(r.date) >= 5, hol: r.holiday, today: r.date === t, viol: r.violations.some((x) => x.severity === 'bad') }" @click="router.push(`/zeit/tag/${r.date}`)">
               <td style="white-space: nowrap">{{ WEEKDAYS[weekday(r.date)] }} {{ deShort(r.date) }}</td>
               <td>
                 {{ (days.get(r.date)?.segments || []).map((x) => `${x.start}–${x.end}`).join(', ') }}
                 <template v-if="days.get(r.date)?.open"> {{ days.get(r.date).open }}–…</template>
                 <br v-if="hint(r)" /><small class="muted">{{ hint(r) }}</small>
+                <template v-for="x in r.violations" :key="x.code"><br /><small :class="x.severity === 'bad' ? 'neg' : 'warnc'">⚠ {{ LAW_LABEL[x.code] }} ({{ x.law }})</small></template>
               </td>
               <td class="num">{{ r.worked || r.credit ? fmtDur(r.worked + r.credit) : '' }}</td>
               <td class="num" :class="r.balance < 0 ? 'neg' : r.balance > 0 ? 'pos' : ''">{{ r.future || r.untracked ? '' : fmtDur(r.balance, true) }}</td>
