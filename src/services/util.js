@@ -28,3 +28,4 @@ export function debounce(fn, ms) { let t; return (...a) => { clearTimeout(t); t 
 /** Kleine Objekte als URL-Parameter (z. B. Vorschläge der KI-Ausfüllhilfe). */
 export const toB64 = (o) => btoa(unescape(encodeURIComponent(JSON.stringify(o))));
 export const fromB64 = (s) => { try { return JSON.parse(decodeURIComponent(escape(atob(String(s))))); } catch { return null; } };
+export const num = (n) => String(Math.round(Number(n || 0) * 100) / 100).replace('.', ',');

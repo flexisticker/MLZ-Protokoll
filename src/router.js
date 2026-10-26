@@ -4,7 +4,7 @@ const views = import.meta.glob(['./views/*.vue', '!./views/Login.vue']);
 const v = (name) => views[`./views/${name}.vue`];
 export const router = createRouter({
   history: createWebHistory(),
-  scrollBehavior: (to, from, saved) => saved || { top: 0 },
+  scrollBehavior: (to, from, saved) => saved || (to.hash ? new Promise((ok) => setTimeout(() => ok({ el: to.hash, top: 70 }), 300)) : { top: 0 }),
   routes: [
     { path: '/', component: v('Home'), meta: { title: 'MLZ-Protokoll', tab: 'start' } },
     { path: '/diktat/:id?', component: v('Dictate'), meta: { title: 'Entwurf', tab: 'log', back: '/logbuch' } },

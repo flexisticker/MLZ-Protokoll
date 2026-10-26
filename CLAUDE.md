@@ -110,6 +110,12 @@ Eigenständiges Projekt (nicht Teil von Flex-Studio). **Keine Passwörter, Token
   KI füllt sie (runFor nimmt `source.text`, „heute“ = Tag der Notiz). Festschreiben erst nach Prüfung. Export-PDF: „Import aus früherer Zeiterfassung“.
   Getestet: `test/import.test.mjs`, Playwright + Ollama-Attrappe (Vorschau, KI-Auswahl, Import, Entwurf, zweiter Import 0, Export + verify.py).
   **Nicht getestet:** echte vollständige ibuchron-Datei (nur Muster/Ausschnitte des Kunden), echtes Ollama bei vielen Notizen (Dauer).
+- **1.6.0 (26.10.2026):** Urlaubskalender auf „Urlaub & Abwesenheit“ (`src/components/AbsenceCalendar.vue`): Monatsansicht mit Feiertagen (F),
+  halben freien Tagen (½, aus `settings.halfDays`), Abwesenheiten farbig je Art (halbe Tage halb gefüllt). Tag antippen → zweiten Tag antippen = Zeitraum →
+  „Urlaub (n Tage)“, „½ Tag Urlaub“, „Andere Art …“ öffnen das vorbelegte Formular; eingetragenen Tag antippen = Ansicht + Stornieren. Auch für die Zukunft
+  (geplant, im Urlaubskonto als „+ geplant“). An Heiligabend/Silvester gibt es kein „halber Tag“: der Eintrag deckt den Rest des Tages (½ Urlaubstag),
+  `save()` setzt `half` dort auf false (sonst würde nur ¼ Tag angerechnet). Link „halbe freie Tage festlegen“ → Einstellungen `#halbetage`
+  (Router scrollt jetzt zu Ankern). Zahlen mit Komma (`num()` in util.js).
 
 ## Offene Punkte / Ideen
 - Nach der Installation: Erkennungsdauer auf dem Xeon messen; bei guter Zeit Diktat-Modell auf `large-v3-turbo-q5_0` stellen.
