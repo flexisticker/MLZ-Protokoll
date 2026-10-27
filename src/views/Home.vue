@@ -105,7 +105,7 @@ const holiday = computed(() => holidayName(today(), s.value.state, s.value.extra
         </template>
         <template v-else-if="state === 'work'">
           <button class="btn grow" @click="stamp('break-start')"><Icon name="pause" :size="18" /> Pause</button>
-          <button class="btn primary grow" @click="stamp('out')"><Icon name="stop" :size="18" /> Feierabend</button>
+          <button class="btn primary grow" @click="stamp('out')"><Icon name="stop" :size="18" /> Arbeitsende</button>
         </template>
         <template v-else>
           <button class="btn primary grow" @click="stamp('break-end')"><Icon name="play" :size="18" /> Pause beenden</button>
@@ -152,7 +152,7 @@ const holiday = computed(() => holidayName(today(), s.value.state, s.value.extra
     <Modal v-if="custom" title="Stempeln mit Uhrzeit" @close="custom = null">
       <p class="muted">Für vergessene Stempelungen von heute. Die tatsächliche Eingabezeit wird mit gespeichert.</p>
       <label class="f">Art</label>
-      <select v-model="custom.type"><option value="in">Arbeitsbeginn</option><option value="break-start">Pause Anfang</option><option value="break-end">Pause Ende</option><option value="out">Feierabend</option></select>
+      <select v-model="custom.type"><option value="in">Arbeitsbeginn</option><option value="break-start">Pause Anfang</option><option value="break-end">Pause Ende</option><option value="out">Arbeitsende</option></select>
       <label class="f">Uhrzeit</label><input v-model="custom.time" type="time" />
       <div class="actions"><button class="btn" @click="custom = null">Abbrechen</button><button class="btn primary" @click="stamp(custom.type, `${today()}T${custom.time}`)">Speichern</button></div>
     </Modal>

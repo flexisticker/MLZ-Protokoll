@@ -357,7 +357,7 @@ app.post('/api/assist/test', wrap(async (req, res) => {
   try { res.json(await assist.testConnection()); } catch (e) { res.json({ ok: false, error: e.message }); }
 }));
 app.post('/api/assist/pull', wrap(async (req, res) => res.json(await assist.pullModel())));
-// Bemerkung zu einer Arbeitszeit (z. B. Anruf nach Feierabend) als Logbuch-Entwurf
+// Bemerkung zu einer Arbeitszeit (z. B. Anruf nach Arbeitsende) als Logbuch-Entwurf
 app.post('/api/drafts/from-time', wrap(async (req, res) => {
   const b = req.body || {};
   if (!DATE_RE.test(b.date || '') || !String(b.text || '').trim()) throw bad('Datum oder Text fehlt');

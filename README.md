@@ -6,7 +6,7 @@ Selbst gehostete App (Docker auf Unraid, Bedienung am Handy) für:
   (whisper.cpp im Container, Modelle der Video-Zentrale mitbenutzt, keine Cloud), Fotos und Anlagen, Leitfragen (wer, was, wann, wo, Zeugen, Zitate), Tatsachen getrennt von Bewertungen.
 - **KI-Ausfüllhilfe:** frei erzählen – eine lokale KI (Ollama, optional Claude) erkennt Vorfall / BR-Sache / Arbeitszeit / Urlaub
   und füllt das passende Formular aus; KI-Felder sind markiert, festgeschrieben wird erst nach Prüfung, der Vorschlag bleibt in der Beweiskette.
-- **Arbeitszeit:** Stempeln (Beginn/Pause/Feierabend) oder per Sprache („halb acht angefangen, 30 Minuten Pause, bis 16 Uhr“),
+- **Arbeitszeit:** Stempeln (Beginn/Pause/Arbeitsende) oder per Sprache („halb acht angefangen, 30 Minuten Pause, bis 16 Uhr“),
   Pausenregeln (§ 4 ArbZG), Soll/Ist/Saldo, Feiertage je Bundesland, halbe freie Tage (24.12./31.12.) mit Grundlage,
   Mehrarbeit mit „angeordnet/gebilligt/geduldet von“, Ausschlussfristen und Geltendmachung.
 - **Urlaub & Abwesenheit:** Urlaubskonto mit halben Tagen, Übertrag und Verfall, Krankheit, Schulung, Freizeitausgleich.

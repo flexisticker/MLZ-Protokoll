@@ -90,9 +90,9 @@ function apply(text) {
   }
   fill(p, text);
 }
-const ADD_WORDS = /angerufen|anruf|rief|nach feierabend|noch ?mal|später|abends|zusätzlich|danach|nachträglich|hinterher/i;
+const ADD_WORDS = /angerufen|anruf|rief|nach feierabend|nach arbeitsende|wieder (?:angefangen|aufgenommen|eingestiegen)|noch ?mal|später|abends|zusätzlich|danach|nachträglich|hinterher/i;
 function fill(p, text = '') {
-  // Nachtrag zu einem schon erfassten Tag (z. B. Anruf nach Feierabend) → neuer Abschnitt statt Überschreiben
+  // Nachtrag zu einem schon erfassten Tag (z. B. Anruf nach Arbeitsende) → neuer Abschnitt statt Überschreiben
   const segs = f.value.segments.filter((x) => x.start && x.end);
   const lastEnd = segs.map((x) => x.end).sort().at(-1) || '';
   const correction = /korrektur|falsch|vertan|versprochen|stimmt nicht/i.test(text);
@@ -138,7 +138,7 @@ function addAfter() { f.value.segments.push({ start: '', end: '', note: '', by: 
 function segBy(s) { if (s.by && !f.value.overtime.orderedBy) Object.assign(f.value.overtime, { orderedBy: s.by, how: 'angeordnet' }); }
 const logOffer = ref(null); // nach dem Speichern: Bemerkungen als Logbuch-Eintrag anbieten
 async function toLog(s) {
-  const text = [s.note, s.after && !/feierabend/i.test(s.note || '') ? '(nach Feierabend)' : ''].filter(Boolean).join(' ');
+  const text = [s.note, s.after ? '(nach Arbeitsende, Arbeit wieder aufgenommen)' : ''].filter(Boolean).join(' ');
   try {
     const r = await api('/drafts/from-time', { method: 'POST', body: { date: date.value, start: s.start, end: s.end, text: text || 'Arbeit außerhalb der regulären Arbeitszeit', by: s.by } });
     await loadDrafts();
@@ -177,8 +177,8 @@ const stampLabel = { in: 'Beginn', out: 'Ende', 'break-start': 'Pause', 'break-e
 
     <div class="card">
       <Recorder :label="audio?.text ? 'Korrektur sprechen' : 'Arbeitszeit sprechen'" :max-sec="120" @recorded="recorded" />
-      <small v-if="audio?.text" class="muted" style="display: block; margin-top: 6px">Etwas falsch erkannt oder versprochen? Einfach nochmal sprechen, z. B. „Korrektur: Feierabend war um 17 Uhr“ – nur die genannten Angaben werden ersetzt.</small>
-      <small v-if="listenHint && !audio" class="muted" style="display: block; margin-top: 8px">Beispiel: „Heute um halb acht angefangen, 30 Minuten Pause, Feierabend um 16 Uhr 15. Herr Maier hat die Überstunden angeordnet.“</small>
+      <small v-if="audio?.text" class="muted" style="display: block; margin-top: 6px">Etwas falsch erkannt oder versprochen? Einfach nochmal sprechen, z. B. „Korrektur: Arbeitsende war um 17 Uhr“ – nur die genannten Angaben werden ersetzt.</small>
+      <small v-if="listenHint && !audio" class="muted" style="display: block; margin-top: 8px">Beispiel: „Heute um halb acht angefangen, 30 Minuten Pause, aufgehört um 16 Uhr 15. Herr Maier hat die Überstunden angeordnet.“</small>
       <button v-if="settings().webSpeech && webSpeechAvailable()" class="btn small" style="margin-top: 8px" @click="living ? stopLive() : live()">{{ living ? 'Beenden' : 'Live-Erkennung (Google)' }}</button>
       <p v-if="living" class="quote">{{ liveText || '…' }}</p>
       <div v-if="audio" style="margin-top: 10px">
@@ -192,7 +192,7 @@ const stampLabel = { in: 'Beginn', out: 'Ende', 'break-start': 'Pause', 'break-e
     <div class="card">
       <h3>Arbeitszeit</h3>
       <div v-for="(s, i) in f.segments" :key="i" :class="{ 'seg-extra': s.after || s.note || s.by }" style="margin-bottom: 8px">
-        <small v-if="s.after" class="badge warn" style="margin-bottom: 4px; display: inline-block">nach Feierabend</small>
+        <small v-if="s.after" class="badge warn" style="margin-bottom: 4px; display: inline-block">nach Arbeitsende wieder aufgenommen</small>
         <div class="row">
           <input v-model="s.start" type="time" class="grow" aria-label="Beginn" />
           <span>–</span>
@@ -202,15 +202,15 @@ const stampLabel = { in: 'Beginn', out: 'Ende', 'break-start': 'Pause', 'break-e
         <template v-if="s.after || s.note || s.by || s.open">
           <input v-model="s.note" style="margin-top: 6px" placeholder="Wofür? z. B. Anruf Chef, Mail an Kunden geschrieben" />
           <input v-model="s.by" style="margin-top: 6px" placeholder="Veranlasst von (z. B. Chef Herr Maier)" @change="segBy(s)" />
-          <label class="check" style="margin-top: 4px"><input v-model="s.after" type="checkbox" /> <span>nach Feierabend / außerhalb der Arbeitszeit</span></label>
+          <label class="check" style="margin-top: 4px"><input v-model="s.after" type="checkbox" /> <span>nach Arbeitsende – Arbeit wieder aufgenommen</span></label>
         </template>
         <a v-else href="#" style="font-size: .82rem" @click.prevent="s.open = true">+ Bemerkung zu diesem Abschnitt</a>
       </div>
       <div class="row wrap">
         <button class="btn small" @click="f.segments.push({ start: '', end: '' })"><Icon name="plus" :size="16" /> Abschnitt</button>
-        <button class="btn small" @click="addAfter"><Icon name="plus" :size="16" /> Nach Feierabend gearbeitet</button>
+        <button class="btn small" @click="addAfter"><Icon name="plus" :size="16" /> Arbeit wieder aufgenommen</button>
       </div>
-      <small class="muted" style="display: block; margin-top: 4px">Anruf oder Mail nach Feierabend? Einfach sprechen, z. B. „Um 17 Uhr hat der Chef angerufen, bis 17:20 Mail an Kunden geschrieben“ – wird als eigener Abschnitt angehängt.</small>
+      <small class="muted" style="display: block; margin-top: 4px">Schon aufgehört und dann noch ein Anruf oder eine Mail? Einfach sprechen, z. B. „Um 17 Uhr hat der Chef angerufen, bis 17:20 Mail an Kunden geschrieben“ – wird als eigener Abschnitt angehängt.</small>
       <label class="f">Pause (Minuten)<span class="hint">Lücken zwischen Abschnitten zählen automatisch als Pause</span></label>
       <input v-model.number="f.breakMinutes" type="number" min="0" step="5" inputmode="numeric" />
       <label class="f">Ort / Einsatz (optional)</label><input v-model="f.location" />
@@ -247,7 +247,7 @@ const stampLabel = { in: 'Beginn', out: 'Ende', 'break-start': 'Pause', 'break-e
 
     <button class="btn primary block" @click="save"><Icon name="check" :size="18" /> Speichern</button>
     <Modal v-if="logOffer" title="Auch ins Logbuch?" @close="router.push('/zeit')">
-      <p>Arbeit außerhalb der Arbeitszeit ist oft ein wichtiger Nachweis (Erreichbarkeit, Druck, Ruhezeit). Als Vorfall festhalten?</p>
+      <p>Arbeit, die nach deinem Arbeitsende wieder aufgenommen werden musste, ist ein wichtiger Nachweis (Erreichbarkeit, Druck, Ruhezeit) – auch bei Vertrauensarbeitszeit. Als Vorfall festhalten?</p>
       <div v-for="(x, i) in logOffer" :key="i" class="card flat" style="padding: 10px">
         <b>{{ x.start }}–{{ x.end }}</b><template v-if="x.by"> · {{ x.by }}</template><br /><small>{{ x.note || 'ohne Bemerkung' }}</small>
         <button class="btn small primary block" style="margin-top: 8px" @click="toLog(x)">Als Vorfall ins Logbuch</button>
