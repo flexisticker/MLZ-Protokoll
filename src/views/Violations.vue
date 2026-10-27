@@ -39,10 +39,14 @@ const HOW = {
   gebilligt: 'die Überschreitungen der Arbeitszeit billigend in Kauf genommen',
   geduldet: 'die Überschreitungen der Arbeitszeit gekannt und geduldet',
   angeordnet: 'die Mehrarbeit angeordnet',
+  notwendig: 'mir Arbeit übertragen und Vorgaben gemacht, die in der regulären Arbeitszeit nicht zu erledigen waren – die Mehrarbeit war dafür notwendig',
   bekannt: 'von diesen Arbeitszeiten gewusst',
 };
 const BASIS = [
-  'Die Arbeitszeiten waren bekannt: Zeiterfassung/Stundenzettel liegen dem Vorgesetzten vor.',
+  'Vertrauensarbeitszeit: Der Arbeitgeber erfasst meine Arbeitszeit nicht, obwohl er dazu verpflichtet ist (§ 16 Abs. 2 ArbZG, BAG 1 ABR 22/21).',
+  'Mails, CRM-Einträge und Termine mit Uhrzeit sind für den Vorgesetzten sichtbar und zeigen die langen Arbeitstage.',
+  'Der Vorgesetzte hat mich nach meinem Arbeitsende angerufen bzw. mir Aufträge gegeben.',
+  'Vorgaben wie Besuchszahl am Tag und Besuchszeiten (erster Besuch früh, letzter spät) machen längere Tage nötig.',
   'Die zugewiesene Arbeitsmenge war in der regulären Arbeitszeit nicht zu schaffen.',
   'Termine wurden außerhalb der regulären Arbeitszeit angesetzt.',
   'Ich habe auf die Überlastung hingewiesen, geändert hat sich nichts.',
@@ -142,7 +146,7 @@ async function doCancel() {
       <label class="f">Was trifft zu?</label>
       <select v-model="form.how">
         <option value="gebilligt">billigend in Kauf genommen</option><option value="geduldet">gekannt und geduldet</option>
-        <option value="angeordnet">angeordnet</option><option value="bekannt">wusste davon</option>
+        <option value="notwendig">durch Arbeitsmenge/Vorgaben notwendig</option><option value="angeordnet">angeordnet</option><option value="bekannt">wusste davon</option>
       </select>
       <div class="alert" style="margin-top: 10px">„{{ statement }}“</div>
       <label class="f">Woran erkennt man das? (Pflicht)</label>

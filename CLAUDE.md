@@ -133,6 +133,9 @@ Eigenständiges Projekt (nicht Teil von Flex-Studio). **Keine Passwörter, Token
   Export: Abschnitts-Bemerkungen im Hinweis. **Achtung CSS:** `.seg` ist der Umschalter (Auffälligkeit/BR) – nicht wiederverwenden (jetzt `.seg-extra`).
 - **1.8.1 (27.10.2026):** Kunde hat **keine Kernarbeitszeit / keinen festen Feierabend** (Vertrauensarbeitszeit) → Begriffe: „nach Arbeitsende – Arbeit wieder
   aufgenommen“ statt „nach Feierabend“ (`after` = nach dem eigenen Arbeitsende des Tages), Stempelknopf „Arbeitsende“. **Regel: nie „Feierabend“ als feste Zeit annehmen.**
+- **1.8.2 (27.10.2026):** Kunde muss **keine Zeiten freigeben lassen** (Vertrauensarbeitszeit, niemand zeichnet ab) → Begründungs-Vorschläge auf „Verstöße“ ohne
+  „Stundenzettel liegen vor“, stattdessen Erfassungspflicht des Arbeitgebers, sichtbare Mails/CRM-Zeiten, Anrufe nach Arbeitsende, Vorgaben; neue Einschätzung
+  `how: 'notwendig'` (Arbeitsmenge/Vorgaben). Hinweise-Seite erklärt Kenntnis ohne Freigabe. **Regel: nie annehmen, dass der Vorgesetzte Zeiten abzeichnet.**
 
 ## Offene Punkte / Ideen
 - Nach der Installation: Erkennungsdauer auf dem Xeon messen; bei guter Zeit Diktat-Modell auf `large-v3-turbo-q5_0` stellen.

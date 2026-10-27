@@ -219,7 +219,7 @@ function validate(kind, ref, p) {
       if (!str(p.basis).trim()) throw bad('Bitte begründen, woran man das erkennt');
       return {
         id: p.id, dates, codes: (Array.isArray(p.codes) ? p.codes : []).map((c) => str(c, 20)).slice(0, 20), scope: str(p.scope, 20),
-        how: ['gebilligt', 'geduldet', 'angeordnet', 'bekannt'].includes(p.how) ? p.how : 'gebilligt', person: str(p.person, 200),
+        how: ['gebilligt', 'geduldet', 'angeordnet', 'notwendig', 'bekannt'].includes(p.how) ? p.how : 'gebilligt', person: str(p.person, 200),
         text: str(p.text, 4000), basis: str(p.basis, 4000), evidence: str(p.evidence, 2000),
       };
     }

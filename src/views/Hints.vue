@@ -50,7 +50,8 @@
       <h2>Arbeitszeit &amp; Überstunden</h2>
       <ul>
         <li>Für Überstunden muss man vor Gericht darlegen, <b>dass</b> man gearbeitet hat und dass der Arbeitgeber die Mehrarbeit <b>angeordnet, gebilligt oder geduldet</b> hat (BAG, 5 AZR 359/21). Darum fragt das Programm bei Mehrarbeit nach „Wer wusste davon?“.</li>
-        <li>Auch bei Vertrauensarbeitszeit muss der Arbeitgeber die Arbeitszeit erfassen (BAG, 1 ABR 22/21). Die eigene Aufzeichnung ist oft die wichtigste Grundlage.</li>
+        <li>Auch bei Vertrauensarbeitszeit muss der Arbeitgeber die Arbeitszeit erfassen (BAG, 1 ABR 22/21; Zeiten über 8 Std. am Tag nach § 16 Abs. 2 ArbZG). Die eigene Aufzeichnung ist oft die wichtigste Grundlage.</li>
+        <li><b>Vertrauensarbeitszeit ohne Freigabe:</b> Wenn niemand deine Zeiten abzeichnet, „weiß“ der Arbeitgeber nicht automatisch davon. Die Kenntnis zeigst du über andere Tatsachen: Anrufe und Aufträge nach deinem Arbeitsende, Mails/CRM-Einträge mit Uhrzeit, Vorgaben (Besuchszahl, Besuchszeiten, Listen), die in 8 Std. nicht zu schaffen sind, eigene Hinweise auf Überlastung. Genau das hier festhalten.</li>
         <li><b>Ausschlussfristen</b> aus Vertrag oder Tarif (oft 3 Monate) beachten: Ansprüche rechtzeitig <b>schriftlich</b> geltend machen und das hier festhalten.</li>
         <li>Pausen: über 6 Std. Arbeit mindestens 30 Min., über 9 Std. 45 Min. (§ 4 ArbZG); höchstens 10 Std. am Tag (§ 3); 11 Std. Ruhezeit (§ 5).</li>
       </ul>
