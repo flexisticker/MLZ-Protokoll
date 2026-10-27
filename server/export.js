@@ -65,7 +65,7 @@ function select({ from, to, parts, caseId }) {
     times.push(true);
   }
   const absences = parts.includes('absence') && !caseId ? activeAbsences(st).filter((a) => a.to >= from && a.from <= to) : [];
-  for (const a of Object.values(st.absences)) if (absences.some((x) => x.id === a.id) || (a.cancelled && parts.includes('absence') && a.to >= from && a.from <= to)) { chosen.add(a.evidenceId); if (a.cancelled) chosen.add(a.cancelled.evidenceId); }
+  for (const a of Object.values(st.absences)) if (absences.some((x) => x.id === a.id) || (a.cancelled && parts.includes('absence') && a.to >= from && a.from <= to)) { chosen.add(a.evidenceId); if (a.cancelled) chosen.add(a.cancelled.evidenceId); for (const e of a.ends || []) chosen.add(e.evidenceId); }
   const br = parts.includes('br') && !caseId ? activeBr(st).filter((b) => inRange(b.date)) : [];
   for (const b of br) chosen.add(b.evidenceId);
   if (caseId && st.cases[caseId]) { chosen.add(st.cases[caseId].evidenceId); for (const h of st.cases[caseId].history) chosen.add(h.evidenceId); }
@@ -257,7 +257,12 @@ function buildPdf(sel, opts, info) {
   if (sel.absences.length) {
     doc.addPage();
     h1('Abwesenheiten und Urlaub');
-    for (const a of sel.absences) t(`${de(a.from)}${a.to && a.to !== a.from ? ` – ${de(a.to)}` : ''}: ${ABSENCE_TYPES[a.type]?.label || a.type}${a.half ? ' (halber Tag)' : ''}${a.approvedBy ? ` · genehmigt von ${a.approvedBy}${a.approvedAt ? ` am ${de(a.approvedAt)}` : ''}` : ''}${a.note ? ` · ${a.note}` : ''}`);
+    for (const a of sel.absences) {
+      t(`${de(a.from)}${a.fromTime ? ` ab ${a.fromTime} Uhr (während der Arbeit)` : ''}${a.to && a.to !== a.from ? ` – ${de(a.to)}` : ''}${a.openEnd ? ' (Ende noch offen)' : ''}: ${ABSENCE_TYPES[a.type]?.label || a.type}${a.half ? ' (halber Tag)' : ''}${a.approvedBy ? ` · genehmigt von ${a.approvedBy}${a.approvedAt ? ` am ${de(a.approvedAt)}` : ''}` : ''}${a.note ? ` · ${a.note}` : ''}`);
+      const sick = [a.reportedTo || a.reportedAt ? `Krankmeldung an ${a.reportedTo || '–'}${a.reportedAt ? ` am ${de(a.reportedAt.slice(0, 10))} ${a.reportedAt.slice(11)} Uhr` : ''}${a.reportedHow ? ` (${a.reportedHow})` : ''}` : '', a.doctorAt ? `Arzt/AU am ${de(a.doctorAt)}` : '',
+        ...(a.ends || []).map((e) => `Ende eingetragen am ${de(String(e.receivedAt).slice(0, 10))}: bis ${de(e.to)}${e.back ? `, Arbeitsbeginn ${de(e.back)}` : ''}`)].filter(Boolean);
+      if (sick.length) small(sick.join(' · '));
+    }
     const abs = activeAbsences(st);
     for (let y = Number(opts.from.slice(0, 4)); y <= Number(opts.to.slice(0, 4)); y++) {
       const v = vacationAccount(y, s, abs, localToday());

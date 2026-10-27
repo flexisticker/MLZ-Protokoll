@@ -19,7 +19,7 @@ Eigenständiges Projekt (nicht Teil von Flex-Studio). **Keine Passwörter, Token
   BR-Ausgleich § 37 Abs. 3, Ausschlussfristen).
 - **Beweiskette** `server/evidence.js`: Tabelle `evidence` nur anhängen (Trigger), `hash = SHA-256(prev|seq|id|kind|ref|event_at|captured_at|received_at|payload_hash|device)`,
   Inhalt löschen nur nach Löschvermerk `erase` (Prüfwerte bleiben). Arten vom Browser: entry, addendum, retract, time, stamp,
-  absence(-cancel), br(-cancel), claim, case(-close/-reopen), settings, assessment(-cancel), rule, rule-end. Server: file, transcript, erase.
+  absence(-cancel/-end), br(-cancel), claim, case(-close/-reopen), settings, assessment(-cancel), rule, rule-end. Server: file, transcript, erase.
   Objekt-Arten (entry/absence/br/case) haben Beweis-ID = Objekt-ID (Doppelübertragung → idempotent).
 - Lesesicht `server/state.js` baut alles aus der Kette (Cache, bei jedem Anhängen verworfen) → `/api/state`.
 - Dateien `server/files.js`: Upload als Rohdaten mit `x-sha256` vom Handy (Abweichung → 422), Ablage `dateien/JJJJ/<id>.<ext>`, chmod 444.
@@ -59,7 +59,7 @@ Eigenständiges Projekt (nicht Teil von Flex-Studio). **Keine Passwörter, Token
   192.168.3.0/24 in der Access List. Details `docs/INSTALLATION-UNRAID.md` Abschnitt 5.
 
 ## Testen
-- `npm test` (26 Tests), `node test/mock-services.mjs` (Zeitstempeldienst :8098 mit eigener CA in `test/.tsa/`, Ollama-Attrappe :8097,
+- `npm test` (28 Tests), `node test/mock-services.mjs` (Zeitstempeldienst :8098 mit eigener CA in `test/.tsa/`, Ollama-Attrappe :8097,
   Claude-Attrappe :8096 mit `CLAUDE_BASE_URL=http://127.0.0.1:8096`, Schlüssel `sk-ant-test`), Spracherkennung per
   `WHISPER_BIN=$PWD/test/fake-whisper.sh` (Text über `FAKE_WHISPER_TEXT_FILE`; braucht eine – auch leere – Modelldatei `ggml-small.bin` in `MODEL_DIR` oder `DATA_DIR/whisper`),
   Server mit `TSA_URLS=http://127.0.0.1:8098/tsr TSA_CA_FILE=$PWD/test/.tsa/ca.crt WHISPER_PRELOAD=off`.
@@ -148,6 +148,14 @@ Eigenständiges Projekt (nicht Teil von Flex-Studio). **Keine Passwörter, Token
   Einschätzung (Verstöße) mit `ruleIds` + Begründungszeilen aus Vorgaben, Standard `notwendig` wenn Vorgaben galten. Neue Arten: Leistungsdruck/Zielvorgaben,
   Mikromanagement/Kontrolle, Zusatzarbeit als Sanktion, Erreichbarkeit nach Arbeitsende; BR: Überwachung/Leistungskontrolle (§ 87 Abs. 1 Nr. 6),
   BR-Arbeit bei Zielen nicht berücksichtigt (§ 37 Abs. 2, § 78). Export: Seite „Vorgaben und Pflichten“, BR-Wochen, Vorgaben-Bezug der Einschätzung.
+- **1.10.0 (27.10.2026):** Krankmeldung. `shared/sickparse.js` `parseSick(text, today)` (krank/AU/krankgeschrieben …; „ab Montag wieder“ → back, to = back − 1;
+  „bis einschließlich …“; „seit gestern“; während der Arbeit „um 11 Uhr … nach Hause/abgebrochen“ → fromTime; Arzt → doctorAt; „Chef Bescheid gesagt“ → reportedTo;
+  ohne Ende → openEnd). Abwesenheit hat jetzt optional `fromTime`, `openEnd`, `reportedTo`, `reportedAt`, `reportedHow`, `doctorAt`; neue Beweisart **`absence-end`**
+  {to, back, doctorAt, note} (state: `a.ends[]`, to gesetzt, openEnd false). Offene Krankmeldung läuft bis heute (`activeAbsences` Server + Browser).
+  `dayResult`: am ersten Tag mit `fromTime` zählt Gearbeitetes, Anrechnung = Soll − gearbeitet. KI-Schema absence + back/fromTime/reportedTo/doctorAt,
+  Server ergänzt mit `parseSick`; Entwurf zeigt „Das klingt nach einer Krankmeldung“ auch ohne KI. Formular: Ende offen, ab Uhrzeit, „Arbeitsende stempeln“
+  (Stempel out mit note krank), gemeldet bei/wie/wann, Arzt; „Ende eintragen“ (`?ende=<id>`), Start-Link „Krank geworden? …“ (`?krank=1`).
+  Aufgaben: Ende offen, Meldung fehlt, > 3 Kalendertage ohne Arzt (§ 5 EFZG). Export mit Meldung/Arzt/Ende.
 
 ## Offene Punkte / Ideen
 - Nach der Installation: Erkennungsdauer auf dem Xeon messen; bei guter Zeit Diktat-Modell auf `large-v3-turbo-q5_0` stellen.

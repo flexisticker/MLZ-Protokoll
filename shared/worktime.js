@@ -98,7 +98,7 @@ export function dayResult(date, settings, day, absences = [], prevEnd = null) {
   const absFactor = abs ? (abs.half ? 0.5 : 1) : 0;
   let target = base;
   if (type?.noTarget) target = Math.round(base * (1 - absFactor));
-  const credit = type?.credit ? Math.round(base * absFactor) : 0;
+  let credit = type?.credit ? Math.round(base * absFactor) : 0;
 
   const violations = [];
   const v = (code, law, text, severity = 'bad') => violations.push({ code, law, text, severity });
@@ -122,6 +122,8 @@ export function dayResult(date, settings, day, absences = [], prevEnd = null) {
     if (prevEnd != null && first - prevEnd < 660) v('rest', '§ 5 ArbZG', `Ruhezeit nur ${fmtDur(first - prevEnd)} Std. – mindestens 11 Std. vorgeschrieben`);
     if (weekday(date) === 6 || holiday) v(holiday ? 'holiday' : 'sunday', '§ 9 ArbZG', holiday ? `Arbeit am Feiertag (${holiday}) – nur mit Ausnahme nach § 10 ArbZG erlaubt` : 'Sonntagsarbeit – nur mit Ausnahme nach § 10 ArbZG erlaubt', 'check');
   }
+  // Während der Arbeit krank geworden (abs.fromTime am ersten Tag): Gearbeitetes zählt, der Rest bis zur Sollzeit wird angerechnet
+  if (abs?.fromTime && date === abs.from && type?.credit) credit = Math.max(0, base - worked);
   const warnings = violations.map((x) => `${x.text} (${x.law})`);
   const balance = worked + credit - target;
   return { date, holiday, half: half?.name || '', base, target, credit, absence: abs, gross, breakTaken, breakNeeded, worked, balance, warnings, violations, first, last };

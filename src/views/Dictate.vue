@@ -1,4 +1,5 @@
 <script setup>
+import { parseSick } from '../../shared/sickparse.js';
 // Entwurf eines Logbuch-Eintrags: diktieren, Fotos, Leitfragen – dann festschreiben.
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
@@ -81,6 +82,16 @@ function useSuggestion() {
   if (sg.kind === 'time') router.push({ path: `/zeit/tag/${sg.time.date}`, query: { ...q, vorschlag: toB64({ ...sg.time, spoken: sg.spoken, fileId: d.value.fileIds.find((f) => d.value.files[f]?.purpose === 'audio') || '' }) } });
   if (sg.kind === 'absence') router.push({ path: '/abwesenheit', query: { ...q, vorschlag: toB64(sg.absence) } });
   if (sg.kind === 'brtime') router.push({ path: '/betriebsrat', query: { ...q, vorschlag: toB64(sg.brtime) } });
+}
+// Krankmeldung erkannt (feste Regeln – auch ohne KI oder wenn die KI es als Vorfall einordnet)
+const spokenAll = computed(() => (d.value?.fileIds || []).map((f) => store.data?.transcripts?.[f]?.text).filter(Boolean).join('. '));
+const sick = computed(() => {
+  if (!spokenAll.value || suggestionKind.value === 'absence' || d.value?.sickDismissed) return null;
+  const p = parseSick(spokenAll.value, localNow().slice(0, 10));
+  return p.sick ? p : null;
+});
+function useSick() {
+  router.push({ path: '/abwesenheit', query: { entwurf: d.value.id, vorschlag: toB64({ type: 'krank', ...sick.value, note: spokenAll.value.slice(0, 900) }) } });
 }
 function keepAsEntry() {
   d.value.keepEntry = true;
@@ -207,6 +218,11 @@ const setNow = () => { d.value.eventAt = localNow(); d.value.eventAtAuto = false
       <small class="muted">{{ d.source.kind === 'time-note' ? 'Bemerkung zur Arbeitszeit' : 'Notiz aus der früheren Zeiterfassung (ibuchron)' }} vom {{ d.source.date.split('-').reverse().join('.') }}<template v-if="d.source.start">, Arbeitszeit {{ d.source.start }}–{{ d.source.end }}</template>:</small><br />
       „{{ d.source.text }}“
       <div v-if="!String(d.facts || '').includes(d.source.text)" style="margin-top: 6px"><button class="btn small" @click="d.facts = [d.facts, d.source.text].filter(Boolean).join('\n')">In „Was ist passiert“ übernehmen</button></div>
+    </div>
+
+    <div v-if="sick" class="alert warn">
+      Das klingt nach einer <b>Krankmeldung</b>: ab {{ sick.from.split('-').reverse().join('.') }}<template v-if="sick.fromTime"> {{ sick.fromTime }} Uhr (während der Arbeit)</template><template v-if="sick.back">, wieder Arbeit ab {{ sick.back.split('-').reverse().join('.') }}</template><template v-else-if="!sick.openEnd"> bis {{ sick.to.split('-').reverse().join('.') }}</template><template v-else>, Ende noch offen</template>.
+      <div class="row wrap" style="margin-top: 6px"><button class="btn small primary" @click="useSick">Als Krankmeldung eintragen</button><button class="btn small" @click="d.sickDismissed = true">Nein, Logbuch-Eintrag</button></div>
     </div>
 
     <div v-if="d.assistWanted && st" class="alert" :class="{ ok: st === 'done', bad: st === 'error', warn: suggestionKind }">

@@ -17,7 +17,7 @@ export const SCHEMA = obj({
   title: str, category: str, eventDate: str, eventTime: str, eventEnd: str, location: str,
   persons: str, witnesses: str, facts: str, quotes: str, consequences: str, reaction: str, assessment: str,
   time: obj({ date: str, start: str, end: str, breakMinutes: { type: 'integer' }, orderedBy: str, how: str, reason: str }),
-  absence: obj({ type: { type: 'string', enum: [...ABSENCE_KEYS, ''] }, from: str, to: str, half: { type: 'boolean' }, approvedBy: str }),
+  absence: obj({ type: { type: 'string', enum: [...ABSENCE_KEYS, ''] }, from: str, to: str, back: str, fromTime: str, half: { type: 'boolean' }, approvedBy: str, reportedTo: str, doctorAt: str }),
   brtime: obj({ date: str, start: str, end: str, outside: { type: 'boolean' }, topic: str, place: str, abmeldungTo: str }),
   missing: { type: 'array', items: str },
 });
@@ -42,9 +42,12 @@ export function systemPrompt(categories) {
     '- "title": kurzer sachlicher Titel (max. 8 Wörter). "category": eine passende Art aus der Liste, sonst "".',
     '- Datum und Uhrzeiten aus relativen Angaben ("heute", "gestern", "vorhin um zehn", "halb acht" = 07:30) berechnen; Format JJJJ-MM-TT und HH:MM.',
     '- "kind": incident = Auffälligkeit/Vorfall im Beruf; br = Betriebsratsangelegenheit (Behinderung, Mitbestimmung, Gespräch als BR);',
-    '  time = es geht nur um die eigene Arbeitszeit (Beginn, Ende, Pause, Überstunden); absence = Urlaub, Krankheit, freier Tag;',
+    '  time = es geht nur um die eigene Arbeitszeit (Beginn, Ende, Pause, Überstunden); absence = Urlaub, Krankheit (auch: während der Arbeit krank geworden), freier Tag;',
     '  brtime = nur Zeiten eigener BR-Tätigkeit (Sitzung, Abmeldung). Bei Mischformen den Hauptinhalt wählen.',
     '- Nur das Objekt zur gewählten Art ausfüllen ("time", "absence" oder "brtime"); die anderen mit leeren Werten (Zahl 0, false).',
+    '- Krankheit: absence.type = krank. "from" = erster Krankheitstag, "back" = Tag, an dem die Arbeit wieder beginnt („ab Montag wieder“), sonst "to" = letzter Krankheitstag',
+    '  („krankgeschrieben bis Freitag“); beides leer, wenn das Ende noch offen ist. "fromTime" = Uhrzeit, ab der während der Arbeit abgebrochen wurde.',
+    '  "reportedTo" = wem die Krankheit gemeldet wurde, "doctorAt" = Datum des Arztbesuchs / der Krankschreibung.',
     '- "time.how": angeordnet | gebilligt | geduldet | notwendig oder "". "time.breakMinutes": Pause in Minuten, 0 wenn nicht genannt.',
     '- "missing": höchstens 4 kurze Fragen nach wichtigen fehlenden Angaben (z. B. „Wer war dabei?“, „Um wie viel Uhr?“). Keine Fragen nach Unwichtigem.',
     '',
@@ -124,7 +127,17 @@ export function normalize(r, now) {
     kind,
     fields: Object.fromEntries(Object.entries(fields).filter(([, v]) => v)),
     time: { date: DATE.test(t.date || '') ? t.date : now.slice(0, 10), start: okTime(t.start), end: okTime(t.end), breakMinutes: Math.max(0, Math.min(600, Number(t.breakMinutes) || 0)), orderedBy: clean(t.orderedBy, 200), how: ['angeordnet', 'gebilligt', 'geduldet', 'notwendig'].includes(t.how) ? t.how : '', reason: clean(t.reason, 1000) },
-    absence: { type: ABSENCE_KEYS.includes(a.type) ? a.type : 'urlaub', from: DATE.test(a.from || '') ? a.from : '', to: DATE.test(a.to || '') ? a.to : '', half: !!a.half, approvedBy: clean(a.approvedBy, 200) },
+    absence: (() => {
+      const type = ABSENCE_KEYS.includes(a.type) ? a.type : 'urlaub';
+      const from = DATE.test(a.from || '') ? a.from : '';
+      const back = DATE.test(a.back || '') ? a.back : '';
+      let to = DATE.test(a.to || '') ? a.to : '';
+      if (back && !to) { const d = new Date(`${back}T12:00:00`); d.setDate(d.getDate() - 1); to = d.toISOString().slice(0, 10); }
+      return {
+        type, from, to, back, half: !!a.half, approvedBy: clean(a.approvedBy, 200), fromTime: okTime(a.fromTime), reportedTo: clean(a.reportedTo, 200),
+        doctorAt: DATE.test(a.doctorAt || '') ? a.doctorAt : '', openEnd: type === 'krank' && !to,
+      };
+    })(),
     brtime: { date: DATE.test(b.date || '') ? b.date : now.slice(0, 10), start: okTime(b.start), end: okTime(b.end), outside: !!b.outside, topic: clean(b.topic, 1000), place: clean(b.place, 300), abmeldungTo: clean(b.abmeldungTo, 200) },
     missing: (Array.isArray(r?.missing) ? r.missing : []).map((q) => clean(q, 200)).filter(Boolean).slice(0, 4),
   };

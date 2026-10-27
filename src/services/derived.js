@@ -23,7 +23,9 @@ export function workDays() {
   for (const [date, t] of Object.entries(d.times || {})) days.set(date, { segments: t.segments || [], breakMinutes: t.breakMinutes, breaks: t.breaks || [], source: t.source || 'form' });
   return days;
 }
-export const activeAbsences = () => Object.values(store.data?.absences || {}).filter((a) => !a.cancelled).sort((a, b) => a.from.localeCompare(b.from));
+/** Gültige Abwesenheiten; eine Krankmeldung mit offenem Ende läuft bis heute. */
+export const activeAbsences = () => Object.values(store.data?.absences || {}).filter((a) => !a.cancelled)
+  .map((a) => (a.openEnd ? { ...a, to: a.from > today() ? a.from : today() } : a)).sort((a, b) => a.from.localeCompare(b.from));
 export const activeBr = () => Object.values(store.data?.br || {}).filter((b) => !b.cancelled).sort((a, b) => (a.date + a.start).localeCompare(b.date + b.start));
 export const startDate = () => trackingStart(settings(), store.data?.firstDate);
 

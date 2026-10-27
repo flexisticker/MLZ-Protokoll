@@ -150,6 +150,7 @@ const upcoming = computed(() => activeAbsences().filter((a) => (a.to || a.from) 
         </template>
         <button class="btn small ghost" title="Mit anderer Uhrzeit stempeln" @click="custom = { time: nowTime(), type: state === 'work' ? 'out' : state === 'break' ? 'break-end' : 'in' }"><Icon name="edit" :size="18" /></button>
       </div>
+      <router-link to="/abwesenheit?krank=1" style="display: inline-block; margin-top: 8px; font-size: .85rem">{{ state === 'work' || state === 'break' ? 'Krank geworden? Arbeit abbrechen und krankmelden' : 'Krank? Krankmeldung eintragen' }}</router-link>
     </div>
 
     <div class="kgrid">

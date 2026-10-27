@@ -45,6 +45,7 @@ export function build() {
       case 'stamp': if (p?.at) { const d = p.at.slice(0, 10); (out.stamps[d] ||= []).push({ ...p, ...m }); noteDate(out, d); } break;
       case 'absence': if (p?.id) { out.absences[p.id] = { ...p, ...m, cancelled: null }; } break;
       case 'absence-cancel': if (out.absences[r.ref] && p) out.absences[r.ref].cancelled = { ...p, ...m }; break;
+      case 'absence-end': { const a = out.absences[r.ref]; if (a && p) { a.ends = [...(a.ends || []), { ...p, ...m }]; a.to = p.to; a.openEnd = false; if (p.doctorAt && !a.doctorAt) a.doctorAt = p.doctorAt; } break; }
       case 'br': if (p?.id) { out.br[p.id] = { ...p, ...m, cancelled: null }; noteDate(out, p.date); } break;
       case 'br-cancel': if (out.br[r.ref] && p) out.br[r.ref].cancelled = { ...p, ...m }; break;
       case 'claim': if (p) out.claims.push({ ...p, ...m }); break;
@@ -73,7 +74,10 @@ export function workDays(st = build()) {
   for (const [d, t] of Object.entries(st.times)) days.set(d, { segments: t.segments || [], breakMinutes: t.breakMinutes, breaks: t.breaks || [], source: t.source || 'form' });
   return days;
 }
-export const activeAbsences = (st = build()) => Object.values(st.absences).filter((a) => !a.cancelled).sort((a, b) => a.from.localeCompare(b.from));
+const today = () => new Date().toLocaleString('sv-SE', { timeZone: process.env.TZ || 'Europe/Berlin' }).slice(0, 10);
+/** Gültige Abwesenheiten; eine Krankmeldung mit offenem Ende läuft bis heute. */
+export const activeAbsences = (st = build()) => Object.values(st.absences).filter((a) => !a.cancelled)
+  .map((a) => (a.openEnd ? { ...a, to: a.from > today() ? a.from : today() } : a)).sort((a, b) => a.from.localeCompare(b.from));
 export const activeBr = (st = build()) => Object.values(st.br).filter((b) => !b.cancelled).sort((a, b) => (a.date + a.start).localeCompare(b.date + b.start));
 
 /** Für den Browser: alles als einfaches JSON. */

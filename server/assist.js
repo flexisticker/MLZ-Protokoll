@@ -9,6 +9,7 @@ import { transcriptOf } from './transcribe.js';
 import { CATEGORIES } from '../shared/categories.js';
 import { ENTRY_FIELDS, NOTE_SCHEMA, SCHEMA, combineSpoken, extractWhen, normalize, notesPrompt, notesUserPrompt, systemPrompt, userPrompt } from '../shared/assist.js';
 import { parseWorkTime } from '../shared/timeparse.js';
+import { parseSick } from '../shared/sickparse.js';
 
 const CLAUDE_MODEL = 'claude-opus-5-5';
 const localNow = () => new Date().toLocaleString('sv-SE', { timeZone: process.env.TZ || 'Europe/Berlin' }).replace(' ', 'T').slice(0, 16);
@@ -209,6 +210,18 @@ async function runFor(id) {
   }
   // Arbeitszeit: feste Regeln für Uhrzeiten sind zuverlässiger als die KI
   // Mehrere Aufnahmen der Reihe nach auswerten: eine spätere Angabe (Korrektur) ersetzt die frühere.
+  // Krankmeldung: feste Regeln ergänzen, was die KI nicht erkannt hat
+  if (n.kind === 'absence') {
+    const p = parseSick(texts.filter(Boolean).join('. '), now.slice(0, 10));
+    if (p.sick) {
+      const a = n.absence;
+      if (!a.type || a.type === 'urlaub') a.type = 'krank';
+      if (!a.from) a.from = p.from;
+      if (!a.to && !a.back && !p.openEnd) { a.to = p.to; a.back = p.back; }
+      a.openEnd = a.type === 'krank' && !a.to;
+      for (const f of ['fromTime', 'reportedTo', 'doctorAt']) if (!a[f] && p[f]) a[f] = p[f];
+    }
+  }
   if (n.kind === 'time') {
     for (const t of texts.filter((x) => x && x !== '(keine Sprache erkannt)')) {
       const p = parseWorkTime(t, now.slice(0, 10));

@@ -148,7 +148,7 @@ app.delete('/api/me/passkeys/:id', (req, res) => { pk.removePasskey(req.user.id,
 // ------------------------------------------------------------ Daten
 app.get('/api/state', (req, res) => res.json({ ...clientState(), head: head(), today: localDay() }));
 
-const CLIENT_KINDS = ['entry', 'addendum', 'retract', 'time', 'stamp', 'absence', 'absence-cancel', 'br', 'br-cancel', 'claim', 'case', 'case-close', 'case-reopen', 'settings', 'assessment', 'assessment-cancel', 'rule', 'rule-end'];
+const CLIENT_KINDS = ['entry', 'addendum', 'retract', 'time', 'stamp', 'absence', 'absence-cancel', 'absence-end', 'br', 'br-cancel', 'claim', 'case', 'case-close', 'case-reopen', 'settings', 'assessment', 'assessment-cancel', 'rule', 'rule-end'];
 const ID_RE = /^[A-Za-z0-9-]{8,64}$/;
 const DATE_RE = /^\d{4}-\d\d-\d\d$/;
 const TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
@@ -199,7 +199,20 @@ function validate(kind, ref, p) {
       return { at: p.at.slice(0, 16), type: p.type, note: str(p.note, 500), late: !!p.late };
     case 'absence':
       if (!ID_RE.test(p.id || '') || !DATE_RE.test(p.from || '') || (p.to && !DATE_RE.test(p.to))) throw bad('Abwesenheit unvollständig');
-      return { id: p.id, type: str(p.type, 20), from: p.from, to: p.to && p.to >= p.from ? p.to : p.from, half: !!p.half && (!p.to || p.to === p.from), note: str(p.note, 1000), approvedBy: str(p.approvedBy, 200), approvedAt: DATE_RE.test(p.approvedAt || '') ? p.approvedAt : '', requestedAt: DATE_RE.test(p.requestedAt || '') ? p.requestedAt : '' };
+      return {
+        id: p.id, type: str(p.type, 20), from: p.from, to: p.to && p.to >= p.from ? p.to : p.from, half: !!p.half && (!p.to || p.to === p.from) && !p.fromTime, note: str(p.note, 1000),
+        approvedBy: str(p.approvedBy, 200), approvedAt: DATE_RE.test(p.approvedAt || '') ? p.approvedAt : '', requestedAt: DATE_RE.test(p.requestedAt || '') ? p.requestedAt : '',
+        // Krankmeldung: während der Arbeit ab Uhrzeit, Ende offen, wann/wem/wie gemeldet, Arzt/eAU
+        ...(TIME_RE.test(p.fromTime || '') ? { fromTime: p.fromTime } : {}), ...(p.openEnd ? { openEnd: true } : {}),
+        ...(p.reportedTo ? { reportedTo: str(p.reportedTo, 200) } : {}), ...(/^\d{4}-\d\d-\d\dT\d\d:\d\d$/.test(p.reportedAt || '') ? { reportedAt: p.reportedAt } : {}),
+        ...(p.reportedHow ? { reportedHow: str(p.reportedHow, 60) } : {}), ...(DATE_RE.test(p.doctorAt || '') ? { doctorAt: p.doctorAt } : {}),
+      };
+    case 'absence-end': {
+      const a = st.absences[ref];
+      if (!a || a.cancelled) throw bad('Abwesenheit nicht gefunden');
+      if (!DATE_RE.test(p.to || '') || p.to < a.from) throw bad('Ende liegt vor dem Beginn');
+      return { to: p.to, back: DATE_RE.test(p.back || '') ? p.back : '', doctorAt: DATE_RE.test(p.doctorAt || '') ? p.doctorAt : '', note: str(p.note, 1000) };
+    }
     case 'absence-cancel': if (!st.absences[ref]) throw bad('Abwesenheit nicht gefunden'); return { reason: str(p.reason, 1000) };
     case 'br':
       if (!ID_RE.test(p.id || '') || !DATE_RE.test(p.date || '') || !TIME_RE.test(p.start || '') || !TIME_RE.test(p.end || '')) throw bad('BR-Tätigkeit unvollständig');
