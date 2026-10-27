@@ -184,7 +184,8 @@ function validate(kind, ref, p) {
         : { reason: str(p.reason, 2000) };
     case 'time': {
       if (!DATE_RE.test(p.date || '')) throw bad('Datum fehlt');
-      const segments = (Array.isArray(p.segments) ? p.segments : []).filter((s) => TIME_RE.test(s.start) && TIME_RE.test(s.end)).map((s) => ({ start: s.start, end: s.end })).slice(0, 12);
+      const segments = (Array.isArray(p.segments) ? p.segments : []).filter((s) => TIME_RE.test(s.start) && TIME_RE.test(s.end))
+        .map((s) => ({ start: s.start, end: s.end, ...(s.note ? { note: str(s.note, 1000) } : {}), ...(s.by ? { by: str(s.by, 200) } : {}), ...(s.after ? { after: true } : {}) })).slice(0, 12);
       const breaks = (Array.isArray(p.breaks) ? p.breaks : []).filter((s) => TIME_RE.test(s.start) && TIME_RE.test(s.end)).map((s) => ({ start: s.start, end: s.end })).slice(0, 12);
       const o = p.overtime || {};
       return {
@@ -356,6 +357,13 @@ app.post('/api/assist/test', wrap(async (req, res) => {
   try { res.json(await assist.testConnection()); } catch (e) { res.json({ ok: false, error: e.message }); }
 }));
 app.post('/api/assist/pull', wrap(async (req, res) => res.json(await assist.pullModel())));
+// Bemerkung zu einer Arbeitszeit (z. B. Anruf nach Feierabend) als Logbuch-Entwurf
+app.post('/api/drafts/from-time', wrap(async (req, res) => {
+  const b = req.body || {};
+  if (!DATE_RE.test(b.date || '') || !String(b.text || '').trim()) throw bad('Datum oder Text fehlt');
+  const id = assist.draftFromTimeNote({ date: b.date, start: TIME_RE.test(b.start || '') ? b.start : '', end: TIME_RE.test(b.end || '') ? b.end : '', text: String(b.text).slice(0, 4000), by: String(b.by || '').slice(0, 200) }, localDay());
+  res.json({ id });
+}));
 app.post('/api/assist/draft/:id', (req, res) => {
   const d = assist.getDraft(req.params.id);
   if (!d) return res.status(404).json({ error: 'Entwurf noch nicht beim Server – kurz warten' });

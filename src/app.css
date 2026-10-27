@@ -143,3 +143,5 @@ audio { width: 100%; height: 40px; }
 .badge.ai { background: #efe7ff; color: #5b2bb5; vertical-align: middle; }
 @media (prefers-color-scheme: dark) { .badge.ai { background: #33255a; color: #d4c2ff; } }
 .btn.speak { min-height: 64px; font-size: 1.1rem; border-radius: 16px; }
+
+.seg-extra { border-left: 3px solid var(--warn); padding-left: 8px; }

@@ -179,3 +179,15 @@ function restoreName(original, normalized) {
   const norm = (w) => w.toLowerCase().replace(/ä/g, 'ae').replace(/ö/g, 'oe').replace(/ü/g, 'ue').replace(/ß/g, 'ss').replace(/[^a-z]/g, '');
   return words.map((w) => (src.find((o) => norm(o) === w) || w).replace(/[.,;:!?]+$/, '')).join(' ').trim();
 }
+
+/** Wer hat die (Nach-)Arbeit veranlasst? „der Chef hat angerufen“, „mein Chef Herr Maier rief an“, „RVL wollte noch …“ */
+export function initiator(text) {
+  const t = String(text || '');
+  const role = '(?:Chef(?:in)?|Vorgesetzte[rn]?|Teamleiter(?:in)?|Abteilungsleiter(?:in)?|Gebietsleiter(?:in)?|Bereichsleiter(?:in)?|Niederlassungsleiter(?:in)?|Geschäftsführer(?:in)?|RVL|VL)';
+  const name = '(?:(?:Herr|Frau)\\s+[A-ZÄÖÜ][\\wäöüß-]+)';
+  const re = new RegExp(`(?:(?:mein(?:e|em|en)?|der|die|unser(?:e)?)\\s+)?(${role}(?:\\s*,?\\s*${name})?|${name})(?=[^.]{0,40}\\b(?:hat|hatte|rief|ruft|wollte|will|schrieb|schickte|bat|meinte|sagte|angerufen|geschrieben|gefordert|verlangt))`, 'i');
+  const m = t.match(re);
+  if (!m) return '';
+  const v = m[1].replace(/\s*,\s*/, ' ').trim();
+  return v.charAt(0).toUpperCase() + v.slice(1);
+}

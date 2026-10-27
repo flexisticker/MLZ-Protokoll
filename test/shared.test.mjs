@@ -88,3 +88,11 @@ test('Verstöße gegen das Arbeitszeitgesetz', async () => {
   const w = lawViolations(range('2026-03-09', '2026-03-15', s, long, []), s);
   assert.ok(w.some((x) => x.code === 'week60'));
 });
+
+test('Wer hat die Nacharbeit veranlasst?', async () => {
+  const { initiator } = await import('../shared/timeparse.js');
+  assert.equal(initiator('Um 17 Uhr hat mich der Chef angerufen, danach Mail an den Kunden'), 'Chef');
+  assert.equal(initiator('mein Chef Herr Maier hat angerufen'), 'Chef Herr Maier');
+  assert.equal(initiator('Frau Schulz rief um 18 Uhr an'), 'Frau Schulz');
+  assert.equal(initiator('ich habe noch Mails geschrieben'), '');
+});

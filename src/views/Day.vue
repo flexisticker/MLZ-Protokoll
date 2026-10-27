@@ -3,12 +3,13 @@
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import Icon from '../components/Icon.vue';
+import Modal from '../components/Modal.vue';
 import Recorder from '../components/Recorder.vue';
 import { api } from '../services/api.js';
-import { deleteDraft, queueEvidence, queueFile, settings, store, toast } from '../services/store.js';
+import { deleteDraft, loadDrafts, newDraft, queueEvidence, queueFile, saveDraft, settings, store, toast } from '../services/store.js';
 import { webSpeech, webSpeechAvailable } from '../services/recorder.js';
 import { dayRow, stampsToDay } from '../services/derived.js';
-import { parseWorkTime } from '../../shared/timeparse.js';
+import { initiator, parseWorkTime } from '../../shared/timeparse.js';
 import { ABSENCE_TYPES, dayResult, fmtDur } from '../../shared/worktime.js';
 import { WEEKDAYS, de, deTime, today, fromB64 } from '../services/util.js';
 import { addDays, weekday } from '../../shared/holidays.js';
@@ -37,9 +38,10 @@ onMounted(() => {
   if (route.query.sprechen) listenHint.value = true;
   const sg = route.query.vorschlag && fromB64(route.query.vorschlag);
   if (sg) { // Vorschlag der KI-Ausfüllhilfe
-    if (sg.start || sg.end) f.value.segments = [{ start: sg.start || '', end: sg.end || '' }];
-    f.value.breakMinutes = Number(sg.breakMinutes) || 0;
-    if (sg.orderedBy) Object.assign(f.value.overtime, { orderedBy: sg.orderedBy, how: sg.how || 'angeordnet', reason: sg.reason || '' });
+    const before = f.value.segments.length;
+    fill({ start: sg.start || '', end: sg.end || '', breaks: [], breakMinutes: sg.breakMinutes ? Number(sg.breakMinutes) : null, orderedBy: sg.orderedBy || '' }, sg.spoken || '');
+    const added = f.value.segments.length > before;
+    if (!added && sg.orderedBy) Object.assign(f.value.overtime, { orderedBy: sg.orderedBy, how: sg.how || 'angeordnet', reason: sg.reason || '' });
     f.value.source = 'voice'; f.value.spoken = sg.spoken || ''; f.value.fileId = sg.fileId || '';
     if (sg.spoken) audio.value = { id: sg.fileId, status: 'done', text: sg.spoken };
     toast('Vorschlag der KI übernommen – bitte prüfen');
@@ -86,9 +88,21 @@ function apply(text) {
     router.replace({ path: `/zeit/tag/${p.date}`, query: { text, file: f.value.fileId || '', quelle: f.value.source } });
     return;
   }
-  fill(p);
+  fill(p, text);
 }
-function fill(p) {
+const ADD_WORDS = /angerufen|anruf|rief|nach feierabend|noch ?mal|später|abends|zusätzlich|danach|nachträglich|hinterher/i;
+function fill(p, text = '') {
+  // Nachtrag zu einem schon erfassten Tag (z. B. Anruf nach Feierabend) → neuer Abschnitt statt Überschreiben
+  const segs = f.value.segments.filter((x) => x.start && x.end);
+  const lastEnd = segs.map((x) => x.end).sort().at(-1) || '';
+  const correction = /korrektur|falsch|vertan|versprochen|stimmt nicht/i.test(text);
+  if (segs.length && p.start && !correction && (p.start >= lastEnd || ADD_WORDS.test(text))) {
+    const by = initiator(text) || p.orderedBy || '';
+    f.value.segments.push({ start: p.start, end: p.end || '', note: text.trim().slice(0, 1000), by, after: p.start >= lastEnd });
+    if (by && !f.value.overtime.orderedBy) Object.assign(f.value.overtime, { orderedBy: by, how: 'angeordnet', reason: f.value.overtime.reason || text.trim().slice(0, 300) });
+    toast(`Als zusätzlicher Abschnitt ${p.start}–${p.end || '…'} eingetragen`);
+    return;
+  }
   if (p.start || p.end) f.value.segments = [{ start: p.start || f.value.segments[0]?.start || '', end: p.end || f.value.segments[0]?.end || '' }];
   if (p.breaks.length) f.value.segments = splitByBreaks(f.value.segments[0], p.breaks);
   if (p.breakMinutes != null && !p.breaks.length) f.value.breakMinutes = p.breakMinutes;
@@ -120,17 +134,35 @@ const row = computed(() => (store.data ? dayRow(date.value) : null));
 const overtime = computed(() => preview.value && preview.value.balance > 0);
 const unsure = computed(() => parsed.value?.unsure || []);
 
+function addAfter() { f.value.segments.push({ start: '', end: '', note: '', by: '', after: true }); }
+function segBy(s) { if (s.by && !f.value.overtime.orderedBy) Object.assign(f.value.overtime, { orderedBy: s.by, how: 'angeordnet' }); }
+const logOffer = ref(null); // nach dem Speichern: Bemerkungen als Logbuch-Eintrag anbieten
+async function toLog(s) {
+  const text = [s.note, s.after && !/feierabend/i.test(s.note || '') ? '(nach Feierabend)' : ''].filter(Boolean).join(' ');
+  try {
+    const r = await api('/drafts/from-time', { method: 'POST', body: { date: date.value, start: s.start, end: s.end, text: text || 'Arbeit außerhalb der regulären Arbeitszeit', by: s.by } });
+    await loadDrafts();
+    router.push(`/diktat/${r.id}`);
+  } catch { // offline: Entwurf lokal anlegen
+    const d = newDraft('incident', { eventAt: `${date.value}T${s.start || '12:00'}`, eventAtAuto: false, eventEnd: s.end || '', category: 'Überstunden / Arbeitszeit', persons: s.by || '', facts: `${s.start}–${s.end} Uhr: ${text}${s.by ? ` (veranlasst von ${s.by})` : ''}` });
+    await saveDraft(d);
+    router.push(`/diktat/${d.id}`);
+  }
+}
+
 async function save() {
-  const segs = f.value.segments.filter((s) => s.start && s.end);
+  const segs = f.value.segments.filter((s) => s.start && s.end).map((s) => ({ start: s.start, end: s.end, ...(s.note ? { note: s.note } : {}), ...(s.by ? { by: s.by } : {}), ...(s.after ? { after: true } : {}) }));
   const payload = {
     date: date.value, segments: segs, breakMinutes: Number(f.value.breakMinutes) || 0, breaks: [], note: f.value.note, location: f.value.location,
     source: f.value.source, fileId: f.value.fileId || '', spoken: f.value.spoken,
     overtime: overtime.value || f.value.overtime.orderedBy ? f.value.overtime : {},
   };
+  const old = new Set((existing.value?.segments || []).filter((x) => x.note || x.by || x.after).map((x) => `${x.start}|${x.note}|${x.by}`));
   await queueEvidence('time', payload, { label: 'Arbeitszeit' });
   if (route.query.entwurf) await deleteDraft(String(route.query.entwurf));
   toast('Arbeitszeit gespeichert');
-  router.push('/zeit');
+  const offer = segs.filter((x) => (x.after || x.by) && !old.has(`${x.start}|${x.note}|${x.by}`));
+  if (offer.length) logOffer.value = offer; else router.push('/zeit');
 }
 const stampLabel = { in: 'Beginn', out: 'Ende', 'break-start': 'Pause', 'break-end': 'weiter' };
 </script>
@@ -159,13 +191,26 @@ const stampLabel = { in: 'Beginn', out: 'Ende', 'break-start': 'Pause', 'break-e
 
     <div class="card">
       <h3>Arbeitszeit</h3>
-      <div v-for="(s, i) in f.segments" :key="i" class="row" style="margin-bottom: 8px">
-        <input v-model="s.start" type="time" class="grow" aria-label="Beginn" />
-        <span>–</span>
-        <input v-model="s.end" type="time" class="grow" aria-label="Ende" />
-        <button v-if="f.segments.length > 1" class="btn small ghost" @click="f.segments.splice(i, 1)"><Icon name="trash" :size="18" /></button>
+      <div v-for="(s, i) in f.segments" :key="i" :class="{ 'seg-extra': s.after || s.note || s.by }" style="margin-bottom: 8px">
+        <small v-if="s.after" class="badge warn" style="margin-bottom: 4px; display: inline-block">nach Feierabend</small>
+        <div class="row">
+          <input v-model="s.start" type="time" class="grow" aria-label="Beginn" />
+          <span>–</span>
+          <input v-model="s.end" type="time" class="grow" aria-label="Ende" />
+          <button v-if="f.segments.length > 1" class="btn small ghost" @click="f.segments.splice(i, 1)"><Icon name="trash" :size="18" /></button>
+        </div>
+        <template v-if="s.after || s.note || s.by || s.open">
+          <input v-model="s.note" style="margin-top: 6px" placeholder="Wofür? z. B. Anruf Chef, Mail an Kunden geschrieben" />
+          <input v-model="s.by" style="margin-top: 6px" placeholder="Veranlasst von (z. B. Chef Herr Maier)" @change="segBy(s)" />
+          <label class="check" style="margin-top: 4px"><input v-model="s.after" type="checkbox" /> <span>nach Feierabend / außerhalb der Arbeitszeit</span></label>
+        </template>
+        <a v-else href="#" style="font-size: .82rem" @click.prevent="s.open = true">+ Bemerkung zu diesem Abschnitt</a>
       </div>
-      <button class="btn small" @click="f.segments.push({ start: '', end: '' })"><Icon name="plus" :size="16" /> Abschnitt</button>
+      <div class="row wrap">
+        <button class="btn small" @click="f.segments.push({ start: '', end: '' })"><Icon name="plus" :size="16" /> Abschnitt</button>
+        <button class="btn small" @click="addAfter"><Icon name="plus" :size="16" /> Nach Feierabend gearbeitet</button>
+      </div>
+      <small class="muted" style="display: block; margin-top: 4px">Anruf oder Mail nach Feierabend? Einfach sprechen, z. B. „Um 17 Uhr hat der Chef angerufen, bis 17:20 Mail an Kunden geschrieben“ – wird als eigener Abschnitt angehängt.</small>
       <label class="f">Pause (Minuten)<span class="hint">Lücken zwischen Abschnitten zählen automatisch als Pause</span></label>
       <input v-model.number="f.breakMinutes" type="number" min="0" step="5" inputmode="numeric" />
       <label class="f">Ort / Einsatz (optional)</label><input v-model="f.location" />
@@ -196,10 +241,18 @@ const stampLabel = { in: 'Beginn', out: 'Ende', 'break-start': 'Pause', 'break-e
     <div v-if="stamps.length || existing" class="card">
       <h3>Bisher</h3>
       <p v-if="stamps.length" class="muted">Stempelungen: <span v-for="s in stamps" :key="s.evidenceId" style="margin-right: 8px">{{ stampLabel[s.type] }} {{ s.at.slice(11, 16) }}</span></p>
-      <p v-if="existing" class="muted">Gespeicherte Fassung vom {{ deTime(existing.receivedAt) }}: {{ existing.segments.map((s) => `${s.start}–${s.end}`).join(', ') }}, Pause {{ existing.breakMinutes }} Min.<template v-if="existing.import"> · importiert aus {{ existing.import.file }} (Zeile {{ existing.import.line }})</template><template v-if="existing.history?.length"> · {{ existing.history.length }} frühere Fassung(en)</template></p>
+      <p v-if="existing" class="muted">Gespeicherte Fassung vom {{ deTime(existing.receivedAt) }}: {{ existing.segments.map((s) => `${s.start}–${s.end}${s.note ? ` (${s.note})` : ''}`).join(', ') }}, Pause {{ existing.breakMinutes }} Min.<template v-if="existing.import"> · importiert aus {{ existing.import.file }} (Zeile {{ existing.import.line }})</template><template v-if="existing.history?.length"> · {{ existing.history.length }} frühere Fassung(en)</template></p>
       <small class="muted">Speichern legt eine neue Fassung an – die bisherigen bleiben in der Beweiskette erhalten.</small>
     </div>
 
     <button class="btn primary block" @click="save"><Icon name="check" :size="18" /> Speichern</button>
+    <Modal v-if="logOffer" title="Auch ins Logbuch?" @close="router.push('/zeit')">
+      <p>Arbeit außerhalb der Arbeitszeit ist oft ein wichtiger Nachweis (Erreichbarkeit, Druck, Ruhezeit). Als Vorfall festhalten?</p>
+      <div v-for="(x, i) in logOffer" :key="i" class="card flat" style="padding: 10px">
+        <b>{{ x.start }}–{{ x.end }}</b><template v-if="x.by"> · {{ x.by }}</template><br /><small>{{ x.note || 'ohne Bemerkung' }}</small>
+        <button class="btn small primary block" style="margin-top: 8px" @click="toLog(x)">Als Vorfall ins Logbuch</button>
+      </div>
+      <div class="actions"><button class="btn" @click="router.push('/zeit')">Nein, danke</button></div>
+    </Modal>
   </div>
 </template>

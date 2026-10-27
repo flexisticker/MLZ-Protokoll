@@ -59,7 +59,7 @@ Eigenständiges Projekt (nicht Teil von Flex-Studio). **Keine Passwörter, Token
   192.168.3.0/24 in der Access List. Details `docs/INSTALLATION-UNRAID.md` Abschnitt 5.
 
 ## Testen
-- `npm test` (23 Tests), `node test/mock-services.mjs` (Zeitstempeldienst :8098 mit eigener CA in `test/.tsa/`, Ollama-Attrappe :8097,
+- `npm test` (24 Tests), `node test/mock-services.mjs` (Zeitstempeldienst :8098 mit eigener CA in `test/.tsa/`, Ollama-Attrappe :8097,
   Claude-Attrappe :8096 mit `CLAUDE_BASE_URL=http://127.0.0.1:8096`, Schlüssel `sk-ant-test`), Spracherkennung per
   `WHISPER_BIN=$PWD/test/fake-whisper.sh` (Text über `FAKE_WHISPER_TEXT_FILE`; braucht eine – auch leere – Modelldatei `ggml-small.bin` in `MODEL_DIR` oder `DATA_DIR/whisper`),
   Server mit `TSA_URLS=http://127.0.0.1:8098/tsr TSA_CA_FILE=$PWD/test/.tsa/ca.crt WHISPER_PRELOAD=off`.
@@ -124,6 +124,13 @@ Eigenständiges Projekt (nicht Teil von Flex-Studio). **Keine Passwörter, Token
   how gebilligt|geduldet|angeordnet|bekannt, person, text, basis (Pflicht), evidence} + `assessment-cancel`. Wunsch Kunde: bei importierten Verstößen „Vorgesetzter
   hat billigend in Kauf genommen“ → bewusst als **Aussage des Arbeitnehmers mit Begründung** („Nach meiner Einschätzung hat …“), nicht als Tatsache.
   Export-PDF: Abschnitt „Verstöße gegen das Arbeitszeitgesetz“ (VERSTOSS/Prüfen, Import-Hinweis) + „Eigene Einschätzung“, Original-CSV des Imports im ZIP.
+- **1.8.0 (27.10.2026):** Arbeit nach Feierabend (Anlass: Chef ruft um 17 Uhr an, Kundenmail). Zeitabschnitte haben jetzt `note`, `by` (veranlasst von),
+  `after` (nach Feierabend) – Server-`validate` übernimmt sie. Tagesseite: je Abschnitt „Wofür?“/„Veranlasst von“/Häkchen, Knopf „Nach Feierabend gearbeitet“.
+  **Sprechen hängt an statt zu überschreiben:** Tag hat schon Zeiten + neuer Beginn ≥ letztes Ende oder Wörter wie angerufen/danach/nach Feierabend (nicht bei
+  „Korrektur/falsch/vertan“) → neuer Abschnitt mit Text als Bemerkung; gilt auch für KI-Vorschläge (`?vorschlag`). `initiator(text)` (shared/timeparse.js)
+  erkennt Chef/Vorgesetzte/RVL/Herr X/Frau Y → `by` + Mehrarbeit „angeordnet“. Nach dem Speichern Angebot „Als Vorfall ins Logbuch“ → `POST /api/drafts/from-time`
+  (`draftFromTimeNote` in assist.js, `source.kind 'time-note'`, Art „Überstunden / Arbeitszeit“, KI füllt aus; offline lokaler Entwurf). Monat: „nach Feierabend gearbeitet“,
+  Export: Abschnitts-Bemerkungen im Hinweis. **Achtung CSS:** `.seg` ist der Umschalter (Auffälligkeit/BR) – nicht wiederverwenden (jetzt `.seg-extra`).
 
 ## Offene Punkte / Ideen
 - Nach der Installation: Erkennungsdauer auf dem Xeon messen; bei guter Zeit Diktat-Modell auf `large-v3-turbo-q5_0` stellen.

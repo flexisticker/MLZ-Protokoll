@@ -23,7 +23,7 @@ async function saveClaim() {
   claim.value = null;
   toast('Geltendmachung festgehalten');
 }
-const hint = (r) => [r.holiday, r.half && `${r.half} ½`, r.absence && `${ABSENCE_TYPES[r.absence.type]?.label.split(' ')[0] || ''}${r.absence.half ? ' ½' : ''}`, store.data?.times?.[r.date]?.overtime?.orderedBy && 'Mehrarbeit angeordnet', ].filter(Boolean).join(' · ');
+const hint = (r) => [r.holiday, r.half && `${r.half} ½`, r.absence && `${ABSENCE_TYPES[r.absence.type]?.label.split(' ')[0] || ''}${r.absence.half ? ' ½' : ''}`, store.data?.times?.[r.date]?.overtime?.orderedBy && 'Mehrarbeit angeordnet', store.data?.times?.[r.date]?.segments?.some((x) => x.after) && 'nach Feierabend gearbeitet', ].filter(Boolean).join(' · ');
 const yearViol = computed(() => (store.data ? violations(`${ym.value.y}-01-01`, `${ym.value.y}-12-31`) : []));
 const hardViol = computed(() => yearViol.value.filter((v) => v.severity === 'bad').length);
 </script>

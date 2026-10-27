@@ -295,4 +295,23 @@ export function draftsFromNotes(items, { fileId = '', fileName = '', fileMeta = 
   return ids;
 }
 
+/** Bemerkung zu einer Arbeitszeit (z. B. „Chef hat um 17 Uhr angerufen, Mail an Kunden“) → Logbuch-Entwurf, KI füllt aus. */
+export function draftFromTimeNote({ date, start, end, text, by }, today) {
+  const off = config().engine === 'off';
+  const id = `tn-${date.replace(/-/g, '')}-${crypto.createHash('sha256').update(`${start}|${text}`).digest('hex').slice(0, 10)}`;
+  if (getDraft(id)) return id;
+  const full = [start && `${start}${end ? `–${end}` : ''} Uhr:`, text, by && `(veranlasst von ${by})`].filter(Boolean).join(' ');
+  putDraft({
+    id, entryId: crypto.randomUUID(), section: 'incident', createdAt: new Date().toISOString(),
+    eventAt: `${date}T${start || '12:00'}`, eventAtAuto: true, eventEnd: end || '', title: '', category: 'Überstunden / Arbeitszeit', location: '', persons: by || '', witnesses: '',
+    facts: off ? full : '', quotes: '', consequences: '', reaction: '', assessment: '',
+    delayReason: date < today ? 'Aus meiner Bemerkung zur Arbeitszeit dieses Tages übernommen.' : '',
+    caseId: '', fileIds: [], files: {}, applied: [],
+    source: { kind: 'time-note', text: full, date, start, end },
+    assistWanted: !off, assist: { status: off ? 'off' : 'queued', updatedAt: new Date().toISOString() },
+  });
+  if (!off) enqueue(id);
+  return id;
+}
+
 export const status = () => ({ ...publicConfig(), queue: queue.length, busy, pull: pull && { ...pull } });

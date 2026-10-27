@@ -204,7 +204,7 @@ const setNow = () => { d.value.eventAt = localNow(); d.value.eventAtAuto = false
     </div>
 
     <div v-if="d.source?.text" class="alert">
-      <small class="muted">Notiz aus der früheren Zeiterfassung (ibuchron) vom {{ d.source.date.split('-').reverse().join('.') }}<template v-if="d.source.start">, Arbeitszeit {{ d.source.start }}–{{ d.source.end }}</template>:</small><br />
+      <small class="muted">{{ d.source.kind === 'time-note' ? 'Bemerkung zur Arbeitszeit' : 'Notiz aus der früheren Zeiterfassung (ibuchron)' }} vom {{ d.source.date.split('-').reverse().join('.') }}<template v-if="d.source.start">, Arbeitszeit {{ d.source.start }}–{{ d.source.end }}</template>:</small><br />
       „{{ d.source.text }}“
       <div v-if="!String(d.facts || '').includes(d.source.text)" style="margin-top: 6px"><button class="btn small" @click="d.facts = [d.facts, d.source.text].filter(Boolean).join('\n')">In „Was ist passiert“ übernehmen</button></div>
     </div>
