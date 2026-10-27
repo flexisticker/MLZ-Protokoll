@@ -19,7 +19,7 @@ Eigenständiges Projekt (nicht Teil von Flex-Studio). **Keine Passwörter, Token
   BR-Ausgleich § 37 Abs. 3, Ausschlussfristen).
 - **Beweiskette** `server/evidence.js`: Tabelle `evidence` nur anhängen (Trigger), `hash = SHA-256(prev|seq|id|kind|ref|event_at|captured_at|received_at|payload_hash|device)`,
   Inhalt löschen nur nach Löschvermerk `erase` (Prüfwerte bleiben). Arten vom Browser: entry, addendum, retract, time, stamp,
-  absence(-cancel), br(-cancel), claim, case(-close/-reopen), settings. Server: file, transcript, erase.
+  absence(-cancel), br(-cancel), claim, case(-close/-reopen), settings, assessment(-cancel), rule, rule-end. Server: file, transcript, erase.
   Objekt-Arten (entry/absence/br/case) haben Beweis-ID = Objekt-ID (Doppelübertragung → idempotent).
 - Lesesicht `server/state.js` baut alles aus der Kette (Cache, bei jedem Anhängen verworfen) → `/api/state`.
 - Dateien `server/files.js`: Upload als Rohdaten mit `x-sha256` vom Handy (Abweichung → 422), Ablage `dateien/JJJJ/<id>.<ext>`, chmod 444.
@@ -59,7 +59,7 @@ Eigenständiges Projekt (nicht Teil von Flex-Studio). **Keine Passwörter, Token
   192.168.3.0/24 in der Access List. Details `docs/INSTALLATION-UNRAID.md` Abschnitt 5.
 
 ## Testen
-- `npm test` (24 Tests), `node test/mock-services.mjs` (Zeitstempeldienst :8098 mit eigener CA in `test/.tsa/`, Ollama-Attrappe :8097,
+- `npm test` (26 Tests), `node test/mock-services.mjs` (Zeitstempeldienst :8098 mit eigener CA in `test/.tsa/`, Ollama-Attrappe :8097,
   Claude-Attrappe :8096 mit `CLAUDE_BASE_URL=http://127.0.0.1:8096`, Schlüssel `sk-ant-test`), Spracherkennung per
   `WHISPER_BIN=$PWD/test/fake-whisper.sh` (Text über `FAKE_WHISPER_TEXT_FILE`; braucht eine – auch leere – Modelldatei `ggml-small.bin` in `MODEL_DIR` oder `DATA_DIR/whisper`),
   Server mit `TSA_URLS=http://127.0.0.1:8098/tsr TSA_CA_FILE=$PWD/test/.tsa/ca.crt WHISPER_PRELOAD=off`.
@@ -136,6 +136,18 @@ Eigenständiges Projekt (nicht Teil von Flex-Studio). **Keine Passwörter, Token
 - **1.8.2 (27.10.2026):** Kunde muss **keine Zeiten freigeben lassen** (Vertrauensarbeitszeit, niemand zeichnet ab) → Begründungs-Vorschläge auf „Verstöße“ ohne
   „Stundenzettel liegen vor“, stattdessen Erfassungspflicht des Arbeitgebers, sichtbare Mails/CRM-Zeiten, Anrufe nach Arbeitsende, Vorgaben; neue Einschätzung
   `how: 'notwendig'` (Arbeitsmenge/Vorgaben). Hinweise-Seite erklärt Kenntnis ohne Freigabe. **Regel: nie annehmen, dass der Vorgesetzte Zeiten abzeichnet.**
+- **1.9.0 (27.10.2026):** Neue Struktur + Startseite + Vorgaben. **Menü:** Start · Logbuch · 🎙 (Mitte, `/diktat?bereich=incident&sprechen=1`, `Recorder autostart`)
+  · Zeit · Betriebsrat; Zahnrad oben → `/mehr` (Export, Prüfung, Einstellungen, Sicherheit, Hinweise). Reiter je Bereich `components/SubNav.vue` + `services/nav.js`
+  (Logbuch: Einträge/Vorgänge/Vorgaben; Zeit: Monat/Urlaub & Kalender/Verstöße/Import; Betriebsrat: BR-Zeiten/BR-Zeit & Ziele/BR-Einträge = `/logbuch?bereich=br`).
+  **Startseite:** Begrüßung + „Kette geprüft“ (`/api/verify`), Heute (Status, Pause fällig), 4 Kacheln (Saldo, Urlaub, Verstöße, BR-Zeit Monat), Zu erledigen
+  (+ Verstöße ohne Einschätzung), Wochenbalken (rot Verstoß, lila BR, grün abwesend), letzte 3 Einträge, Demnächst. **Vorgaben & Pflichten** (`/vorgaben`,
+  `views/Rules.vue`): Beweisart `rule` {id, title, text, since, by, how, written, witnesses, consequence, evidence, effort[{label, count, minutes, per day|week}], fileIds}
+  – jede Änderung = neue Fassung (state.rules[id].versions), `rule-end` {date, reason}; Vorlagen (7+1, Besuchszeiten, CRM, Wochenvorplanung, Strategien, Zusatzlisten).
+  `shared/rules.js`: `ruleMinutes`, `needOn`, `brMinutesOn` (BR-Tätigkeit + Schulungstag), `brWeeks` (Soll, away, br, available, need, worked; untracked/future übersprungen).
+  **BR-Zeit & Ziele** (`/betriebsrat/ziele`, `views/BrGoals.vue`): Wochentabelle, „Festhalten: Ziele nicht um BR-Zeit gekürzt“ → BR-Entwurf mit Zahlen.
+  Einschätzung (Verstöße) mit `ruleIds` + Begründungszeilen aus Vorgaben, Standard `notwendig` wenn Vorgaben galten. Neue Arten: Leistungsdruck/Zielvorgaben,
+  Mikromanagement/Kontrolle, Zusatzarbeit als Sanktion, Erreichbarkeit nach Arbeitsende; BR: Überwachung/Leistungskontrolle (§ 87 Abs. 1 Nr. 6),
+  BR-Arbeit bei Zielen nicht berücksichtigt (§ 37 Abs. 2, § 78). Export: Seite „Vorgaben und Pflichten“, BR-Wochen, Vorgaben-Bezug der Einschätzung.
 
 ## Offene Punkte / Ideen
 - Nach der Installation: Erkennungsdauer auf dem Xeon messen; bei guter Zeit Diktat-Modell auf `large-v3-turbo-q5_0` stellen.

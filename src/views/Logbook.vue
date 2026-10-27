@@ -1,12 +1,17 @@
 <script setup>
-import { computed, ref } from 'vue';
+import SubNav from '../components/SubNav.vue';
+import { NAV } from '../services/nav.js';
+import { computed, ref, watch } from 'vue';
+import { useRoute } from 'vue-router';
 import Icon from '../components/Icon.vue';
 import { store } from '../services/store.js';
 import { SECTION_LABEL } from '../services/categories.js';
 import { deLocal, deTime } from '../services/util.js';
 
 const q = ref('');
-const section = ref('');
+const route = useRoute();
+const section = ref(['incident', 'br'].includes(route.query.bereich) ? route.query.bereich : '');
+watch(() => route.query.bereich, (b) => { section.value = ['incident', 'br'].includes(b) ? b : ''; });
 const caseId = ref('');
 const entries = computed(() => {
   const s = q.value.trim().toLowerCase();
@@ -22,10 +27,7 @@ const cases = computed(() => Object.values(store.data?.cases || {}));
 
 <template>
   <div class="page">
-    <div class="tiles">
-      <router-link class="tile red" to="/diktat?bereich=incident"><span class="ico"><Icon name="mic" /></span>Auffälligkeit diktieren</router-link>
-      <router-link class="tile" to="/diktat?bereich=br"><span class="ico"><Icon name="users" /></span>Betriebsrat diktieren</router-link>
-    </div>
+    <SubNav :items="NAV.log()" />
 
     <div v-if="store.drafts.length" class="card">
       <h2>Entwürfe <small>(noch nicht festgeschrieben)</small></h2>

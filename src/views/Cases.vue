@@ -1,4 +1,6 @@
 <script setup>
+import SubNav from '../components/SubNav.vue';
+import { NAV } from '../services/nav.js';
 import { computed, ref } from 'vue';
 import Icon from '../components/Icon.vue';
 import Modal from '../components/Modal.vue';
@@ -34,6 +36,7 @@ async function doErase() {
 
 <template>
   <div class="page">
+    <SubNav :items="NAV.log()" />
     <p class="muted">Vorgänge bündeln zusammengehörige Einträge (z. B. „Überstunden 2026“, „Konflikt mit Abteilungsleitung“) für den Export an Anwalt oder Gericht.</p>
     <button class="btn primary block" style="margin-bottom: 12px" @click="form = { title: '', description: '' }"><Icon name="plus" :size="18" /> Neuer Vorgang</button>
     <div v-if="!list.length" class="empty">Noch keine Vorgänge.</div>

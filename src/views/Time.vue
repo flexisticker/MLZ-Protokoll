@@ -1,4 +1,6 @@
 <script setup>
+import SubNav from '../components/SubNav.vue';
+import { NAV } from '../services/nav.js';
 import { computed, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import Icon from '../components/Icon.vue';
@@ -30,10 +32,8 @@ const hardViol = computed(() => yearViol.value.filter((v) => v.severity === 'bad
 
 <template>
   <div class="page">
-    <div class="tiles">
-      <router-link class="tile green" :to="`/zeit/tag/${t}?sprechen=1`"><span class="ico"><Icon name="mic" /></span>Arbeitszeit sprechen</router-link>
-      <router-link class="tile amber" to="/abwesenheit"><span class="ico"><Icon name="calendar" /></span>Urlaub &amp; Abwesenheit<small>{{ vacation().remaining }} Tage frei</small></router-link>
-    </div>
+    <SubNav :items="NAV.time()" />
+    <router-link class="btn primary block" style="margin-bottom: 12px" :to="`/zeit/tag/${t}?sprechen=1`"><Icon name="mic" :size="18" /> Heute erfassen oder sprechen</router-link>
 
     <router-link v-if="yearViol.length" to="/zeit/verstoesse" class="alert plain-link" :class="hardViol ? 'bad' : 'warn'" style="display: block; text-decoration: none">
       <b>⚠ {{ hardViol }} Verstöße gegen das Arbeitszeitgesetz in {{ ym.y }}</b><template v-if="yearViol.length > hardViol"> · {{ yearViol.length - hardViol }} zu prüfen</template><br />

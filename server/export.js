@@ -11,6 +11,7 @@ import { storedPath } from './files.js';
 import { anchorFor, caFor, listAnchors } from './anchors.js';
 import { activeAbsences, activeBr, build, workDays } from './state.js';
 import { STATES, addDays, parseYmd, weekday } from '../shared/holidays.js';
+import { ruleMinutes, brWeeks } from '../shared/rules.js';
 import { ABSENCE_TYPES, LAW_LABEL, brAccount, claimDeadlines, fmtDur, lawViolations, monthBounds, range, trackingStart, vacationAccount } from '../shared/worktime.js';
 
 const localToday = () => new Date().toLocaleString('sv-SE', { timeZone: process.env.TZ || 'Europe/Berlin' }).slice(0, 10);
@@ -59,6 +60,7 @@ function select({ from, to, parts, caseId }) {
       if (r.kind === 'settings' && r.payload) chosen.add(r.id);
       if (r.kind === 'file' && r.payload && JSON.parse(r.payload).purpose === 'import') chosen.add(r.id); // Original-CSV importierter Zeiten
     }
+    for (const r of rows) if (['rule', 'rule-end'].includes(r.kind) && r.payload) { chosen.add(r.id); for (const fid of JSON.parse(r.payload).fileIds || []) chosen.add(fid); }
     for (const a of Object.values(st.assessments || {})) if (a.dates.some(inRange)) { chosen.add(a.evidenceId); if (a.cancelled) chosen.add(a.cancelled.evidenceId); }
     times.push(true);
   }
@@ -245,6 +247,7 @@ function buildPdf(sel, opts, info) {
         if (a.text) t(a.text);
         t(`Begründung: ${a.basis}`);
         if (a.evidence) t(`Belege: ${a.evidence}`);
+        if (a.ruleIds?.length) t(`Bezug auf festgehaltene Vorgaben: ${a.ruleIds.map((id) => st.rules?.[id]?.title || id).join('; ')}`);
         small(`Tage: ${a.dates.map(de).join(', ')}`);
       }
     }
@@ -263,6 +266,27 @@ function buildPdf(sel, opts, info) {
     }
   }
 
+  // ---------------------------------------------------------------- Vorgaben & Pflichten
+  const rules = Object.values(st.rules || {}).filter((r) => (!r.since || r.since <= opts.to) && (!r.ended || r.ended.date >= opts.from));
+  if (sel.times && rules.length) {
+    doc.addPage();
+    h1('Vorgaben und Pflichten');
+    small('Vom Arbeitnehmer festgehaltene Vorgaben des Arbeitgebers (häufig nur mündlich) mit geschätztem Zeitbedarf. Jede Änderung ist als neue Fassung in der Beweiskette.');
+    const target = Math.max(...s.weekTarget);
+    for (const r of rules) {
+      ensure(80);
+      doc.font('Helvetica-Bold'); t(`${r.title}${r.ended ? ` (aufgehoben ab ${de(r.ended.date)})` : ''}`); doc.font('Helvetica');
+      t([r.since && `seit ${de(r.since)}`, r.by && `von ${r.by}`, r.how && `mitgeteilt: ${r.how}`, r.written ? 'schriftlich' : 'nicht schriftlich festgehalten', r.witnesses && `Zeugen: ${r.witnesses}`].filter(Boolean).join(' · '), { width: W });
+      if (r.text) t(r.text, { width: W });
+      if (r.consequence) t(`Folge bei Nichterfüllung: ${r.consequence}`, { width: W });
+      const need = ruleMinutes(r);
+      if (need) t(`Geschätzter Zeitbedarf: ${fmtDur(need)} Std. je Arbeitstag (${r.effort.map((e) => `${e.label || 'Tätigkeit'}: ${e.count} × ${e.minutes} Min./${e.per === 'week' ? 'Woche' : 'Tag'}`).join('; ')})${target ? ` – Sollzeit ${fmtDur(target)} Std.` : ''}`, { width: W });
+      if (r.evidence) t(`Belege: ${r.evidence}`, { width: W });
+      if (r.fileIds?.length) t(`Anlagen: ${r.fileIds.map((f) => st.files[f]?.name || f).join(', ')} (im Ordner dateien/)`, { width: W });
+      small(`Fassung vom ${deTime(r.receivedAt)}${r.versions.length ? ` · ${r.versions.length} frühere Fassung(en)` : ''} · Nr. ${r.seq} · Prüfwert ${r.hash}`);
+    }
+  }
+
   // ---------------------------------------------------------------- Betriebsrat
   if (sel.br.length) {
     doc.addPage();
@@ -276,6 +300,14 @@ function buildPdf(sel, opts, info) {
     const acc = brAccount(activeBr(st), activeAbsences(st), s, workDays(st));
     h2('Ausgleichskonto § 37 Abs. 3 BetrVG');
     t(`Erworben ${fmtDur(acc.earned)} · ausgeglichen ${fmtDur(acc.used)} · offen ${fmtDur(acc.balance)} Std.`);
+    // BR-Zeit gegenüber der für die eigentliche Arbeit verfügbaren Zeit (§ 37 Abs. 2, § 78 BetrVG)
+    const wk = brWeeks(range(opts.from, opts.to < localToday() ? opts.to : localToday(), s, workDays(st), activeAbsences(st), { start: trackingStart(s, st.firstDate), today: localToday() }),
+      { brItems: activeBr(st), absences: activeAbsences(st), rules: st.rules, settings: s }).filter((w) => w.br > 0);
+    if (wk.length) {
+      h2('BR-Zeit und verfügbare Arbeitszeit je Woche');
+      small('Soll ohne Abwesenheit, davon BR-Zeit (Tätigkeit + Schulung); „verfügbar“ = Zeit, die für die übrigen Aufgaben bleibt. Zeitbedarf = geschätzter Bedarf der festgehaltenen Vorgaben.');
+      for (const w of wk) t(`Woche ab ${de(w.week)}: Soll ${fmtDur(w.target - w.away)} · BR ${fmtDur(w.br)} (${Math.round(w.brShare * 100)} %) · verfügbar ${fmtDur(w.available)}${w.need ? ` · Zeitbedarf Vorgaben ${fmtDur(w.need)}` : ''} · gearbeitet ${fmtDur(w.worked)}`);
+    }
   }
 
   // ---------------------------------------------------------------- Zeitstempel

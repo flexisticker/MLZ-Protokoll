@@ -24,15 +24,17 @@ const back = () => (window.history.state?.back ? router.back() : router.push(rou
       <div class="title">{{ route.meta.title || 'MLZ-Protokoll' }}</div>
       <span v-if="!store.online" class="chip warn" title="Keine Verbindung – Aufnahmen bleiben auf dem Handy"><Icon name="cloudoff" :size="14" /> offline</span>
       <button v-if="pending" class="chip" :class="{ bad: failed }" title="Noch nicht beim Server" @click="sync()"><Icon name="sync" :size="14" /> {{ pending }}</button>
+      <router-link v-if="route.meta.tab !== 'more'" to="/mehr" class="gear" aria-label="Einstellungen und mehr" style="color: #fff; display: inline-flex; padding: 6px"><Icon name="settings" /></router-link>
     </header>
     <router-view v-slot="{ Component }">
       <component :is="Component" :key="route.fullPath.split('?')[0]" />
     </router-view>
     <nav class="tabs">
       <router-link to="/" :class="{ active: route.meta.tab === 'start' }" exact-active-class=""><Icon name="home" /><span>Start</span><i v-if="openTodos" class="dot">{{ openTodos }}</i></router-link>
-      <router-link to="/logbuch" :class="{ active: route.meta.tab === 'log' }" active-class=""><Icon name="book" /><span>Logbuch</span></router-link>
+      <router-link to="/logbuch" :class="{ active: route.meta.tab === 'log' }" active-class=""><Icon name="book" /><span>Logbuch</span><i v-if="store.drafts.length" class="dot">{{ store.drafts.length }}</i></router-link>
+      <router-link to="/diktat?bereich=incident&sprechen=1" class="mic" aria-label="Sprechen"><span><Icon name="mic" :size="28" /></span></router-link>
       <router-link to="/zeit" :class="{ active: route.meta.tab === 'time' }" active-class=""><Icon name="clock" /><span>Zeit</span></router-link>
-      <router-link to="/mehr" :class="{ active: route.meta.tab === 'more' }" active-class=""><Icon name="more" /><span>Mehr</span></router-link>
+      <router-link to="/betriebsrat" :class="{ active: route.meta.tab === 'br' }" active-class=""><Icon name="users" /><span>Betriebsrat</span></router-link>
     </nav>
   </template>
   <div v-if="store.toast" class="toast">{{ store.toast }}</div>

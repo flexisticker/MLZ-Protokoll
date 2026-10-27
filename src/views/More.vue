@@ -4,8 +4,6 @@ import { api } from '../services/api.js';
 import { store } from '../services/store.js';
 
 const items = [
-  ['/betriebsrat', 'users', 'BR-Tätigkeit', 'Ab-/Rückmeldung, Ausgleich § 37 Abs. 3'],
-  ['/vorgaenge', 'folder', 'Vorgänge', 'Einträge bündeln, abschließen, Aufbewahrung'],
   ['/export', 'download', 'Export für Anwalt/Gericht', 'PDF + Originale + Prüfprogramm'],
   ['/pruefung', 'shield', 'Prüfung & Zeitstempel', 'Beweiskette, Sicherung, Warteschlange'],
   ['/einstellungen', 'settings', 'Einstellungen', 'Arbeitszeit, Pausen, Urlaub, halbe Tage'],

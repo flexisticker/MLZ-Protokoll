@@ -148,7 +148,7 @@ app.delete('/api/me/passkeys/:id', (req, res) => { pk.removePasskey(req.user.id,
 // ------------------------------------------------------------ Daten
 app.get('/api/state', (req, res) => res.json({ ...clientState(), head: head(), today: localDay() }));
 
-const CLIENT_KINDS = ['entry', 'addendum', 'retract', 'time', 'stamp', 'absence', 'absence-cancel', 'br', 'br-cancel', 'claim', 'case', 'case-close', 'case-reopen', 'settings', 'assessment', 'assessment-cancel'];
+const CLIENT_KINDS = ['entry', 'addendum', 'retract', 'time', 'stamp', 'absence', 'absence-cancel', 'br', 'br-cancel', 'claim', 'case', 'case-close', 'case-reopen', 'settings', 'assessment', 'assessment-cancel', 'rule', 'rule-end'];
 const ID_RE = /^[A-Za-z0-9-]{8,64}$/;
 const DATE_RE = /^\d{4}-\d\d-\d\d$/;
 const TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
@@ -221,8 +221,24 @@ function validate(kind, ref, p) {
         id: p.id, dates, codes: (Array.isArray(p.codes) ? p.codes : []).map((c) => str(c, 20)).slice(0, 20), scope: str(p.scope, 20),
         how: ['gebilligt', 'geduldet', 'angeordnet', 'notwendig', 'bekannt'].includes(p.how) ? p.how : 'gebilligt', person: str(p.person, 200),
         text: str(p.text, 4000), basis: str(p.basis, 4000), evidence: str(p.evidence, 2000),
+        ruleIds: (Array.isArray(p.ruleIds) ? p.ruleIds : []).map(String).filter((id) => st.rules?.[id]).slice(0, 30),
       };
     }
+    case 'rule': {
+      // Vorgabe/Pflicht (oft nur mündlich) – jede Änderung ist eine neue Fassung mit derselben id
+      if (!ID_RE.test(p.id || '')) throw bad('Kennung fehlt');
+      if (!str(p.title).trim()) throw bad('Bitte kurz benennen, z. B. „7+1 Besuche am Tag“');
+      const effort = (Array.isArray(p.effort) ? p.effort : []).slice(0, 20).map((it) => ({
+        label: str(it.label, 120), count: Math.max(0, Math.min(100, Number(it.count) || 0)), minutes: Math.max(0, Math.min(600, Number(it.minutes) || 0)), per: it.per === 'week' ? 'week' : 'day',
+      })).filter((it) => it.label || it.count || it.minutes);
+      return {
+        id: p.id, title: str(p.title, 200), text: str(p.text, 4000), since: DATE_RE.test(p.since || '') ? p.since : '', by: str(p.by, 200), how: str(p.how, 60),
+        written: !!p.written, witnesses: str(p.witnesses, 500), consequence: str(p.consequence, 2000), evidence: str(p.evidence, 2000), effort, fileIds: fileIds(p.fileIds),
+      };
+    }
+    case 'rule-end':
+      if (!st.rules?.[ref]) throw bad('Vorgabe nicht gefunden');
+      return { date: DATE_RE.test(p.date || '') ? p.date : localDay(), reason: str(p.reason, 1000) };
     case 'assessment-cancel': if (!st.assessments?.[ref]) throw bad('Einschätzung nicht gefunden'); return { reason: str(p.reason, 1000) };
     case 'case-close': case 'case-reopen':
       if (!st.cases[ref]) throw bad('Vorgang nicht gefunden');
@@ -249,7 +265,7 @@ app.post('/api/evidence', wrap(async (req, res) => {
   const existing = id && getRow(id);
   if (existing) return res.json({ row: existing, duplicate: true });
   const payload = validate(kind, ref, req.body.payload || {});
-  const eventAt = kind === 'entry' ? payload.eventAt : kind === 'time' ? payload.date : kind === 'stamp' ? payload.at : kind === 'br' ? `${payload.date}T${payload.start}` : kind === 'absence' ? payload.from : kind === 'assessment' ? payload.dates[0] : null;
+  const eventAt = kind === 'entry' ? payload.eventAt : kind === 'time' ? payload.date : kind === 'stamp' ? payload.at : kind === 'br' ? `${payload.date}T${payload.start}` : kind === 'absence' ? payload.from : kind === 'assessment' ? payload.dates[0] : kind === 'rule' ? payload.since || null : null;
   const objId = ['entry', 'absence', 'br', 'case', 'assessment'].includes(kind) ? payload.id : id || crypto.randomUUID();
   if (['entry', 'absence', 'br', 'case', 'assessment'].includes(kind) && getRow(objId)) return res.json({ row: getRow(objId), duplicate: true });
   const { row } = append({ id: objId, kind, ref, eventAt, capturedAt: capturedAt ? String(capturedAt).slice(0, 40) : null, device: device(req), payload });

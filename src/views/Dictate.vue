@@ -190,7 +190,7 @@ const setNow = () => { d.value.eventAt = localNow(); d.value.eventAtAuto = false
     </div>
 
     <div class="card">
-      <Recorder :label="d.fileIds.some((f) => d.files[f]?.purpose === 'audio') ? 'Ergänzen oder korrigieren' : 'Diktieren'" @recorded="recorded" />
+      <Recorder :label="d.fileIds.some((f) => d.files[f]?.purpose === 'audio') ? 'Ergänzen oder korrigieren' : 'Diktieren'" :autostart="!!route.query.sprechen && !d.fileIds.length" @recorded="recorded" />
       <div v-if="settings().webSpeech && webSpeechAvailable()" style="margin-top: 10px">
         <button v-if="!live" class="btn small" type="button" @click="startLive">Live-Diktat (Google)</button>
         <button v-else class="btn small rec" type="button" @click="live()">Live-Diktat beenden</button>

@@ -1,4 +1,6 @@
 <script setup>
+import SubNav from '../components/SubNav.vue';
+import { NAV } from '../services/nav.js';
 // Verstöße gegen das Arbeitszeitgesetz: automatisch aus den erfassten Zeiten. Dazu eigene Einschätzung
 // (z. B. „Vorgesetzter hat es billigend in Kauf genommen“) – als Aussage mit Begründung in der Beweiskette.
 import { computed, ref } from 'vue';
@@ -6,7 +8,8 @@ import Icon from '../components/Icon.vue';
 import Modal from '../components/Modal.vue';
 import { queueEvidence, store, toast } from '../services/store.js';
 import { violations } from '../services/derived.js';
-import { LAW_LABEL } from '../../shared/worktime.js';
+import { LAW_LABEL, fmtDur } from '../../shared/worktime.js';
+import { ruleActiveOn, ruleMinutes } from '../../shared/rules.js';
 import { weekday } from '../../shared/holidays.js';
 import { MONTHS, WEEKDAYS, de, deTime, today, uuid } from '../services/util.js';
 
@@ -55,16 +58,24 @@ const BASIS = [
 const form = ref(null);
 function openForm() {
   if (!pickedList.value.length) return toast('Bitte zuerst Verstöße auswählen');
-  form.value = { how: 'gebilligt', person: '', basis: '', evidence: '' };
+  form.value = { how: rulesFor.value.length ? 'notwendig' : 'gebilligt', person: '', basis: '', evidence: '', ruleIds: new Set() };
 }
 const statement = computed(() => form.value && `Nach meiner Einschätzung hat ${form.value.person.trim() || 'mein Vorgesetzter'} ${HOW[form.value.how]}.`);
+// Vorgaben, die an mindestens einem der ausgewählten Tage galten
+const rulesFor = computed(() => Object.values(store.data?.rules || {}).filter((r) => pickedList.value.some((v) => ruleActiveOn(r, v.date))));
+function ruleLine(r) { return `Vorgabe „${r.title}“${r.by ? ` (von ${r.by}` : ''}${r.since ? `${r.by ? ', ' : ' ('}seit ${de(r.since)}` : ''}${r.by || r.since ? ')' : ''}${ruleMinutes(r) ? ` – Zeitbedarf ca. ${fmtDur(ruleMinutes(r))} Std. je Arbeitstag` : ''}${r.consequence ? `; bei Nichterfüllung: ${r.consequence}` : ''}.`; }
+function toggleRule(r) {
+  const s = new Set(form.value.ruleIds);
+  if (s.has(r.id)) { s.delete(r.id); form.value.basis = form.value.basis.split('\n').filter((l) => l !== ruleLine(r)).join('\n'); } else { s.add(r.id); addBasis(ruleLine(r)); }
+  form.value.ruleIds = s;
+}
 function addBasis(b) { form.value.basis = form.value.basis.trim() ? `${form.value.basis.trim()}\n${b}` : b; }
 async function save() {
   if (!form.value.basis.trim()) return toast('Bitte begründen, woran man das erkennt – sonst ist es nur eine Behauptung');
   const dates = [...new Set(pickedList.value.map((v) => v.date))].sort();
   await queueEvidence('assessment', {
     id: uuid(), dates, codes: [...new Set(pickedList.value.map((v) => v.code))], scope: pickedList.value.every(imported) ? 'import' : 'manual',
-    how: form.value.how, person: form.value.person, text: statement.value, basis: form.value.basis, evidence: form.value.evidence,
+    how: form.value.how, person: form.value.person, text: statement.value, basis: form.value.basis, evidence: form.value.evidence, ruleIds: [...form.value.ruleIds],
   }, { label: 'Einschätzung Verstöße' });
   form.value = null; picked.value = new Set();
   toast('Einschätzung festgehalten');
@@ -78,6 +89,7 @@ async function doCancel() {
 
 <template>
   <div class="page">
+    <SubNav :items="NAV.time()" />
     <div class="card">
       <div class="row between">
         <button class="btn small ghost" aria-label="Vorjahr" @click="year--"><Icon name="left" /></button>
@@ -149,6 +161,13 @@ async function doCancel() {
         <option value="notwendig">durch Arbeitsmenge/Vorgaben notwendig</option><option value="angeordnet">angeordnet</option><option value="bekannt">wusste davon</option>
       </select>
       <div class="alert" style="margin-top: 10px">„{{ statement }}“</div>
+      <template v-if="rulesFor.length">
+        <label class="f">Welche Vorgaben haben die Mehrarbeit nötig gemacht?</label>
+        <div class="row wrap" style="gap: 6px">
+          <button v-for="r in rulesFor" :key="r.id" class="btn small" :class="{ primary: form.ruleIds.has(r.id) }" style="text-align: left" @click="toggleRule(r)">{{ r.title }}<template v-if="ruleMinutes(r)"> · {{ fmtDur(ruleMinutes(r)) }}/Tag</template></button>
+        </div>
+      </template>
+      <p v-else class="muted" style="font-size: .82rem">Tipp: Unter <router-link to="/vorgaben">Vorgaben &amp; Pflichten</router-link> festhalten, was verlangt wird – dann kannst du es hier auswählen.</p>
       <label class="f">Woran erkennt man das? (Pflicht)</label>
       <textarea v-model="form.basis" rows="4" placeholder="Konkrete Tatsachen: wer wusste was, seit wann, woher" />
       <div class="row wrap" style="gap: 6px; margin-top: 6px">

@@ -1,7 +1,11 @@
 export const CATEGORIES = {
   incident: [
     'Anweisung / Druck',
+    'Leistungsdruck / Zielvorgaben',
+    'Mikromanagement / Kontrolle',
+    'Zusatzarbeit als Sanktion',
     'Überstunden / Arbeitszeit',
+    'Erreichbarkeit nach Arbeitsende',
     'Herabsetzung / Mobbing',
     'Benachteiligung / Ungleichbehandlung',
     'Arbeitsschutz / Gesundheit',
@@ -15,6 +19,8 @@ export const CATEGORIES = {
     'Benachteiligung als BR-Mitglied',
     'Information / Unterrichtung verweigert',
     'Mitbestimmung übergangen (§ 87 / § 99 BetrVG)',
+    'Überwachung / Leistungskontrolle (§ 87 Abs. 1 Nr. 6 BetrVG)',
+    'BR-Arbeit bei Zielen nicht berücksichtigt (§ 37 Abs. 2, § 78 BetrVG)',
     'Freistellung / Ab- und Rückmeldung',
     'Gespräch mit Arbeitgeber',
     'Sitzung / Beschluss',

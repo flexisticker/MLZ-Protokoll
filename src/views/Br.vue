@@ -1,4 +1,6 @@
 <script setup>
+import SubNav from '../components/SubNav.vue';
+import { NAV } from '../services/nav.js';
 import { computed, onMounted, ref } from 'vue';
 import { useRoute } from 'vue-router';
 import Icon from '../components/Icon.vue';
@@ -36,6 +38,7 @@ async function doCancel() {
 
 <template>
   <div class="page">
+    <SubNav :items="NAV.br()" />
     <div class="tiles">
       <router-link class="tile" to="/diktat?bereich=br"><span class="ico"><Icon name="mic" /></span>BR-Vorfall diktieren</router-link>
       <button class="tile green" @click="open"><span class="ico"><Icon name="clock" /></span>BR-Zeit erfassen<small>Ab-/Rückmeldung</small></button>

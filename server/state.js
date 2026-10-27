@@ -26,7 +26,7 @@ export function build() {
   const rows = allRows();
   const out = {
     settings: withDefaults({}), settingsHistory: [], files: {}, transcripts: {}, entries: {}, times: {}, stamps: {},
-    absences: {}, br: {}, claims: [], cases: {}, assessments: {}, erased: new Set(), firstDate: null, count: rows.length,
+    absences: {}, br: {}, claims: [], cases: {}, assessments: {}, rules: {}, erased: new Set(), firstDate: null, count: rows.length,
   };
   for (const r of rows) {
     if (r.kind === 'erase') out.erased.add(r.ref);
@@ -50,6 +50,8 @@ export function build() {
       case 'claim': if (p) out.claims.push({ ...p, ...m }); break;
       case 'assessment': if (p?.id) out.assessments[p.id] = { ...p, ...m, cancelled: null }; break;
       case 'assessment-cancel': if (out.assessments[r.ref] && p) out.assessments[r.ref].cancelled = { ...p, ...m }; break;
+      case 'rule': if (p?.id) { const old = out.rules[p.id]; out.rules[p.id] = { ...p, ...m, ended: old?.ended || null, versions: old ? [...old.versions, omitVersions(old)] : [] }; } break;
+      case 'rule-end': if (out.rules[r.ref] && p) out.rules[r.ref].ended = { ...p, ...m }; break;
       case 'case': if (p?.id) out.cases[p.id] = { ...p, ...m, closed: null, history: [] }; break;
       case 'case-close': if (out.cases[r.ref] && p) { out.cases[r.ref].closed = { ...p, ...m }; out.cases[r.ref].history.push({ action: 'close', ...p, ...m }); } break;
       case 'case-reopen': if (out.cases[r.ref] && p) { out.cases[r.ref].closed = null; out.cases[r.ref].history.push({ action: 'reopen', ...p, ...m }); } break;
@@ -60,6 +62,7 @@ export function build() {
   return out;
 }
 
+const omitVersions = (t) => { const { versions, ...rest } = t; return rest; };
 const omitHistory = (t) => { const { history, ...rest } = t; return rest; };
 function noteDate(out, d) { if (d && (!out.firstDate || d < out.firstDate)) out.firstDate = d; }
 
@@ -78,7 +81,7 @@ export function clientState() {
   const st = build();
   return {
     settings: st.settings, settingsHistory: st.settingsHistory.slice(-30), files: st.files, transcripts: st.transcripts, entries: st.entries,
-    times: st.times, stamps: st.stamps, absences: st.absences, br: st.br, claims: st.claims, cases: st.cases, assessments: st.assessments,
+    times: st.times, stamps: st.stamps, absences: st.absences, br: st.br, claims: st.claims, cases: st.cases, assessments: st.assessments, rules: st.rules,
     firstDate: st.firstDate, count: st.count,
   };
 }

@@ -1,6 +1,8 @@
 // Aus dem Serverstand abgeleitete Arbeitszeit-Daten (gleiche Regeln wie im PDF-Bericht).
 import { store, settings } from './store.js';
 import { today } from './util.js';
+import { addDays, weekday } from '../../shared/holidays.js';
+import { brWeeks } from '../../shared/rules.js';
 import { balanceUntil, brAccount, claimDeadlines, range, trackingStart, vacationAccount, lawViolations } from '../../shared/worktime.js';
 
 export function stampsToDay(stamps) {
@@ -45,4 +47,12 @@ export function violations(from, to) {
   const until = to > t ? t : to;
   if (until < from) return [];
   return lawViolations(range(from, until, settings(), workDays(), activeAbsences(), { start: startDate(), today: t }), settings());
+}
+
+/** BR-Zeit, verfügbare Arbeitszeit und Zeitbedarf der Vorgaben je Woche (letzte n Wochen bis heute). */
+export function brWeeksRecent(n = 12) {
+  const t = today();
+  const from = addDays(addDays(t, -weekday(t)), -7 * (n - 1));
+  const rows = range(from, t, settings(), workDays(), activeAbsences(), { start: startDate(), today: t });
+  return brWeeks(rows, { brItems: activeBr(), absences: activeAbsences(), rules: store.data?.rules || {}, settings: settings() }).filter((w) => w.target || w.br || w.worked).reverse();
 }

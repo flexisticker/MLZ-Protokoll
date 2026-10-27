@@ -1,4 +1,6 @@
 <script setup>
+import SubNav from '../components/SubNav.vue';
+import { NAV } from '../services/nav.js';
 import { computed, onMounted, ref } from 'vue';
 import { useRoute } from 'vue-router';
 import Icon from '../components/Icon.vue';
@@ -45,6 +47,7 @@ async function doCancel() {
 
 <template>
   <div class="page">
+    <SubNav :items="NAV.time()" />
     <div class="card">
       <div class="row between">
         <button class="btn small ghost" @click="year--"><Icon name="left" /></button>

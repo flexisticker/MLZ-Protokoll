@@ -1,4 +1,6 @@
 <script setup>
+import SubNav from '../components/SubNav.vue';
+import { NAV } from '../services/nav.js';
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 import Icon from '../components/Icon.vue';
 import { api } from '../services/api.js';
@@ -120,6 +122,7 @@ async function run() {
 
 <template>
   <div class="page">
+    <SubNav :items="NAV.time()" />
     <div class="card">
       <h2>Alte Arbeitszeiten importieren</h2>
       <p class="muted" style="font-size: .9rem">

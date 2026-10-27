@@ -1,9 +1,9 @@
 <script setup>
-import { onBeforeUnmount, ref } from 'vue';
+import { onBeforeUnmount, onMounted, ref } from 'vue';
 import Icon from './Icon.vue';
 import { recordingSupported, secureOk, startRecording } from '../services/recorder.js';
 
-const props = defineProps({ label: { type: String, default: 'Aufnahme starten' }, maxSec: { type: Number, default: 900 } });
+const props = defineProps({ label: { type: String, default: 'Aufnahme starten' }, maxSec: { type: Number, default: 900 }, autostart: Boolean });
 const emit = defineEmits(['recorded']);
 const rec = ref(null);
 const level = ref(0);
@@ -29,6 +29,7 @@ async function stop() {
   if (res.blob.size) emit('recorded', res);
 }
 onBeforeUnmount(() => { clearInterval(timer); if (rec.value) stop(); });
+onMounted(() => { if (props.autostart && secureOk() && recordingSupported()) toggle(); }); // Sprechen-Knopf: Aufnahme läuft sofort
 const mmss = (s) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
 </script>
 
