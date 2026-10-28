@@ -29,10 +29,10 @@ const back = () => (window.history.state?.back ? router.back() : router.push(rou
     <router-view v-slot="{ Component }">
       <component :is="Component" :key="route.fullPath.split('?')[0]" />
     </router-view>
+    <router-link v-if="!route.path.startsWith('/diktat')" to="/diktat?bereich=incident&sprechen=1" class="fab" aria-label="Sprechen – neue Aufnahme" title="Sprechen"><Icon name="mic" :size="30" /></router-link>
     <nav class="tabs">
       <router-link to="/" :class="{ active: route.meta.tab === 'start' }" exact-active-class=""><Icon name="home" /><span>Start</span><i v-if="openTodos" class="dot">{{ openTodos }}</i></router-link>
       <router-link to="/logbuch" :class="{ active: route.meta.tab === 'log' }" active-class=""><Icon name="book" /><span>Logbuch</span><i v-if="store.drafts.length" class="dot">{{ store.drafts.length }}</i></router-link>
-      <router-link to="/diktat?bereich=incident&sprechen=1" class="mic" aria-label="Sprechen"><span><Icon name="mic" :size="28" /></span></router-link>
       <router-link to="/zeit" :class="{ active: route.meta.tab === 'time' }" active-class=""><Icon name="clock" /><span>Zeit</span></router-link>
       <router-link to="/betriebsrat" :class="{ active: route.meta.tab === 'br' }" active-class=""><Icon name="users" /><span>Betriebsrat</span></router-link>
     </nav>

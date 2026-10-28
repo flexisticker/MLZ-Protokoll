@@ -156,6 +156,13 @@ Eigenständiges Projekt (nicht Teil von Flex-Studio). **Keine Passwörter, Token
   Server ergänzt mit `parseSick`; Entwurf zeigt „Das klingt nach einer Krankmeldung“ auch ohne KI. Formular: Ende offen, ab Uhrzeit, „Arbeitsende stempeln“
   (Stempel out mit note krank), gemeldet bei/wie/wann, Arzt; „Ende eintragen“ (`?ende=<id>`), Start-Link „Krank geworden? …“ (`?krank=1`).
   Aufgaben: Ende offen, Meldung fehlt, > 3 Kalendertage ohne Arzt (§ 5 EFZG). Export mit Meldung/Arzt/Ende.
+- **1.11.0 (28.10.2026):** Design-Prüfung mit dem Skill `dickwu/apple-design-skill` (HIG-Grundsätze, für Web/Android: Barrierefreiheit, Farbe, Schrift, Layout, Texte).
+  Behoben: Kontraste gemessen und auf ≥ 4,5:1 gebracht – Text-Tokens `--ok-text/--warn-text/--bad-text/--br-text`, Flächen `--fill-*` mit `--on-fill`
+  (hell weiß, dunkel #0f141b), `--on-brand` (dunkler Modus: Primärknöpfe/aktive Reiter vorher 2,15:1 weiß auf #8fb4e0), `--accent` #d62839 (4,97:1).
+  Schrift mind. .72rem (Kalender-Markierung war .62rem), `.btn.small` 40 px, Reiter 40 px hoch, `:focus-visible`, `prefers-reduced-motion`.
+  **Mikrofon nicht mehr in der Menüleiste** (`tab-bars.md`: „Use a tab bar to support navigation, not to provide actions“) → schwebender Knopf `.fab`
+  rechts über der Menüleiste (auf `/diktat` ausgeblendet), Menü = 4 Reiter. Nicht nur Farbe: Wochenbalken „!“ bei Verstoß, Kalender-Buchstaben (U/K/S/G/F/A),
+  aria-labels für alle Symbol-Knöpfe, „Aufheben …“ statt „Aufgehoben“. Geprüft: hell/dunkel, alle Seiten bei 150 % Schrift ohne Überlauf.
 
 ## Offene Punkte / Ideen
 - Nach der Installation: Erkennungsdauer auf dem Xeon messen; bei guter Zeit Diktat-Modell auf `large-v3-turbo-q5_0` stellen.

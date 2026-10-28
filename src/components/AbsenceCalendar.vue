@@ -56,7 +56,8 @@ const vac = (half) => (range.value ? vacationDays({ type: 'urlaub', ...range.val
 function add(type, half = false) { emit('add', { type, ...range.value, half }); sel.value = null; }
 const cls = (c) => [c.abs && `t-${c.type}`, c.abs?.half && 'halfabs', { we: c.we || c.holiday, hol: c.holiday, halfday: c.half, past: c.past, today: c.date === t, sel: inSel(c.date) }];
 const title = (c) => [c.holiday, c.half && `${c.half} (halber Tag frei)`, c.abs && `${ABSENCE_TYPES[c.abs.type]?.label || c.abs.type}${c.abs.half ? ' (½)' : ''}`].filter(Boolean).join(' · ');
-const legend = [['urlaub', 'Urlaub'], ['krank', 'Krank'], ['schulung', 'Schulung/BR'], ['abbau', 'Gleittag'], ['sonder', 'Sonstiges']];
+const LETTER = { urlaub: 'U', krank: 'K', kindkrank: 'K', schulung: 'S', brcomp: 'A', sonder: 'F', abbau: 'G', unbezahlt: '–' };
+const legend = [['urlaub', 'U Urlaub'], ['krank', 'K Krank'], ['schulung', 'S Schulung/BR'], ['abbau', 'G Gleittag'], ['sonder', 'F Freistellung']];
 </script>
 
 <template>
@@ -68,12 +69,13 @@ const legend = [['urlaub', 'Urlaub'], ['krank', 'Krank'], ['schulung', 'Schulung
     </div>
     <div class="cal">
       <div v-for="w in WEEKDAYS" :key="w" class="wd">{{ w }}</div>
-      <button v-for="(c, i) in cells" :key="c?.date || `e${i}`" type="button" class="cd" :class="c && cls(c)" :disabled="!c" :title="c && title(c)" @click="tap(c)">
+      <button v-for="(c, i) in cells" :key="c?.date || `e${i}`" type="button" class="cd" :class="c && cls(c)" :disabled="!c" :title="c && title(c)" :aria-label="c ? `${c.n}.${title(c) ? ` ${title(c)}` : ''}` : undefined" @click="tap(c)">
         <template v-if="c">
           <span class="n">{{ c.n }}</span>
           <span v-if="c.half && !c.holiday" class="mk">½</span>
           <span v-else-if="c.holiday" class="mk">F</span>
           <span v-if="c.abs?.half" class="mk">½</span>
+          <span v-if="c.abs" class="ab" aria-hidden="true">{{ LETTER[c.type] || '' }}</span>
         </template>
       </button>
     </div>
@@ -105,15 +107,15 @@ const legend = [['urlaub', 'Urlaub'], ['krank', 'Krank'], ['schulung', 'Schulung
 .cd { position: relative; aspect-ratio: 1 / 1; min-width: 0; border: 1px solid var(--line); border-radius: 10px; background: var(--card); color: var(--text); font: inherit; padding: 0; cursor: pointer; display: flex; align-items: center; justify-content: center; }
 .cd:disabled { visibility: hidden; }
 .cd .n { font-size: .92rem; font-variant-numeric: tabular-nums; }
-.cd .mk { position: absolute; top: 1px; right: 4px; font-size: .62rem; font-weight: 700; opacity: .85; }
+.cd .mk { position: absolute; top: 1px; right: 4px; font-size: .72rem; font-weight: 700; opacity: .85; }
 .cd.we { background: var(--soft); color: var(--muted); }
 .cd.past .n { opacity: .6; }
 .cd.today { outline: 2px solid var(--brand-2); outline-offset: -2px; }
 .cd.halfday { background: linear-gradient(135deg, var(--card) 50%, var(--soft) 50%); }
 .cd.sel { outline: 3px solid var(--accent); outline-offset: -3px; }
-.t-urlaub { --c: #2a9d8f; } .t-krank { --c: #c1121f; } .t-kindkrank { --c: #c1121f; } .t-schulung { --c: #6a4c93; } .t-brcomp { --c: #6a4c93; }
-.t-sonder { --c: #457b9d; } .t-abbau { --c: #d4860b; } .t-unbezahlt { --c: #5d6877; }
-.cd[class*='t-'] { background: var(--c); border-color: var(--c); color: #fff; }
+.t-urlaub { --c: var(--fill-ok); } .t-krank { --c: var(--fill-bad); } .t-kindkrank { --c: var(--fill-bad); } .t-schulung { --c: var(--fill-br); } .t-brcomp { --c: var(--fill-br); }
+.t-sonder { --c: var(--fill-info); } .t-abbau { --c: var(--fill-warn); } .t-unbezahlt { --c: var(--fill-muted); }
+.cd[class*='t-'] { background: var(--c); border-color: var(--c); color: var(--on-fill); }
 .cd[class*='t-'].halfabs { background: linear-gradient(135deg, var(--c) 50%, var(--card) 50%); color: var(--text); }
 .cd[class*='t-'].halfabs .n { text-shadow: 0 0 3px var(--card); }
 .legend { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: .74rem; color: var(--muted); }

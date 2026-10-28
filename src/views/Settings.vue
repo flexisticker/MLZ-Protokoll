@@ -115,12 +115,12 @@ async function testMail() {
       <h2>Halbe freie Tage</h2>
       <p class="muted" style="font-size: .9rem">24.12. und 31.12. sind keine gesetzlichen Feiertage. Halbe freie Tage gibt es nur aus Arbeitsvertrag, Tarifvertrag, Betriebsvereinbarung oder betrieblicher Übung – bitte die Grundlage eintragen.</p>
       <div v-for="(h, i) in s.halfDays" :key="i" class="card flat" style="padding: 10px">
-        <div class="row"><input v-model="h.active" type="checkbox" /><input v-model="h.name" class="grow" /><input v-model="h.md" style="width: 80px" placeholder="12-24" /><button class="btn small ghost" @click="s.halfDays.splice(i, 1)"><Icon name="trash" :size="16" /></button></div>
+        <div class="row"><input v-model="h.active" type="checkbox" /><input v-model="h.name" class="grow" /><input v-model="h.md" style="width: 80px" placeholder="12-24" /><button class="btn small ghost" aria-label="Halben Tag entfernen" @click="s.halfDays.splice(i, 1)"><Icon name="trash" :size="16" /></button></div>
         <input v-model="h.basis" style="margin-top: 6px" placeholder="Grundlage, z. B. § 5 Arbeitsvertrag / BV Arbeitszeit vom …" />
       </div>
       <button class="btn small" @click="s.halfDays.push({ md: '', name: '', active: true, basis: '' })"><Icon name="plus" :size="16" /> Tag</button>
       <h3>Zusätzliche örtliche Feiertage</h3>
-      <div v-for="(h, i) in s.extraHolidays" :key="i" class="row" style="margin-bottom: 6px"><input v-model="h.name" class="grow" /><input v-model="h.md" style="width: 80px" placeholder="MM-TT" /><button class="btn small ghost" @click="s.extraHolidays.splice(i, 1)"><Icon name="trash" :size="16" /></button></div>
+      <div v-for="(h, i) in s.extraHolidays" :key="i" class="row" style="margin-bottom: 6px"><input v-model="h.name" class="grow" /><input v-model="h.md" style="width: 80px" placeholder="MM-TT" /><button class="btn small ghost" aria-label="Feiertag entfernen" @click="s.extraHolidays.splice(i, 1)"><Icon name="trash" :size="16" /></button></div>
       <button class="btn small" @click="s.extraHolidays.push({ md: '', name: '' })"><Icon name="plus" :size="16" /> Feiertag</button>
     </div>
 

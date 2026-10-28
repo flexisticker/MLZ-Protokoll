@@ -180,16 +180,16 @@ const upcoming = computed(() => activeAbsences().filter((a) => (a.to || a.from) 
       <div class="row between"><h2 style="margin: 0">Diese Woche</h2><router-link to="/zeit" class="btn small ghost">Arbeitszeit</router-link></div>
       <div class="wbars">
         <div class="tgt" :style="{ bottom: `${(wTarget / wMax) * 90 + 16}px` }" />
-        <router-link v-for="r in week" :key="r.date" :to="`/zeit/tag/${r.date}`" :class="{ v: r.v, u: r.u && !r.worked, b: r.b && !r.v, today: r.date === today() }" :title="`${de(r.date)}: ${fmtDur(r.val)} Std.`">
-          <div :style="{ height: `${Math.max(2, (r.val / wMax) * 90)}px` }" /><span>{{ WEEKDAYS[weekday(r.date)] }}</span>
+        <router-link v-for="r in week" :key="r.date" :to="`/zeit/tag/${r.date}`" :class="{ v: r.v, u: r.u && !r.worked, b: r.b && !r.v, today: r.date === today() }" :title="`${de(r.date)}: ${fmtDur(r.val)} Std.`" :aria-label="`${de(r.date)}: ${fmtDur(r.val)} Std.${r.v ? ', Verstoß' : ''}${r.b ? ', BR-Arbeit' : ''}${r.u ? ', abwesend' : ''}`">
+          <b v-if="r.v" class="vmark" aria-hidden="true">!</b><div :style="{ height: `${Math.max(2, (r.val / wMax) * 90)}px` }" /><span>{{ WEEKDAYS[weekday(r.date)] }}</span>
         </router-link>
       </div>
-      <div class="legend2">gestrichelt = Sollzeit · <span class="neg">rot = Verstoß</span> · <span style="color: #6a4c93">lila = mit BR-Arbeit</span> · <span class="pos">grün = Urlaub/abwesend</span></div>
+      <div class="legend2">gestrichelt = Sollzeit · <span class="neg">rot mit ! = Verstoß</span> · <span style="color: var(--br-text)">lila = mit BR-Arbeit</span> · <span class="pos">grün = Urlaub/abwesend</span></div>
     </div>
 
     <div class="card">
       <div class="row between"><h2 style="margin: 0">Zuletzt festgehalten</h2><router-link to="/logbuch" class="btn small ghost">Logbuch ({{ entryCount }})</router-link></div>
-      <div v-if="!recent.length" class="empty">Noch keine festgeschriebenen Einträge. Einfach unten auf das Mikrofon tippen und erzählen.</div>
+      <div v-if="!recent.length" class="empty">Noch keine festgeschriebenen Einträge. Einfach auf den roten Mikrofon-Knopf tippen und erzählen.</div>
       <ul v-else class="list">
         <li v-for="e in recent" :key="e.id">
           <router-link class="item" :to="`/eintrag/${e.id}`">

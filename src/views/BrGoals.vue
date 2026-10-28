@@ -67,7 +67,7 @@ async function create() {
             <tr v-for="w in weeks" :key="w.week" :class="{ hi: w.need > w.available && w.br }">
               <td style="white-space: nowrap">{{ kw(w.week) }} <small class="muted">{{ de(w.week).slice(0, 6) }}</small></td>
               <td class="num">{{ fmtDur(w.target - w.away) }}</td>
-              <td class="num" :style="w.br ? 'color:#6a4c93;font-weight:650' : ''">{{ w.br ? fmtDur(w.br) : '–' }}</td>
+              <td class="num" :style="w.br ? 'color:var(--br-text);font-weight:650' : ''">{{ w.br ? fmtDur(w.br) : '–' }}</td>
               <td class="num">{{ fmtDur(w.available) }}</td>
               <td class="num" :class="w.need > w.available ? 'neg' : ''">{{ w.need ? fmtDur(w.need) : '–' }}</td>
               <td class="num">{{ fmtDur(w.worked) }}</td>

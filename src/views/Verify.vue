@@ -79,7 +79,7 @@ async function drop(o) { if (confirm('Diesen Eintrag aus der Warteschlange lösc
       <ul class="list">
         <li v-for="o in store.outbox" :key="o.id" class="row">
           <div class="grow"><b>{{ o.label }}</b><br /><small>{{ deTime(o.createdAt) }}</small><small v-if="o.error" class="neg"><br />{{ o.error }}</small></div>
-          <button v-if="o.error" class="btn small ghost" @click="drop(o)"><Icon name="trash" :size="18" /></button>
+          <button v-if="o.error" class="btn small ghost" aria-label="Aus der Warteschlange entfernen" @click="drop(o)"><Icon name="trash" :size="18" /></button>
         </li>
       </ul>
       <button v-if="store.outbox.length" class="btn" @click="sync()"><Icon name="sync" :size="18" /> Jetzt senden</button>

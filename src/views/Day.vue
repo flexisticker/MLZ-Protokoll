@@ -197,7 +197,7 @@ const stampLabel = { in: 'Beginn', out: 'Ende', 'break-start': 'Pause', 'break-e
           <input v-model="s.start" type="time" class="grow" aria-label="Beginn" />
           <span>–</span>
           <input v-model="s.end" type="time" class="grow" aria-label="Ende" />
-          <button v-if="f.segments.length > 1" class="btn small ghost" @click="f.segments.splice(i, 1)"><Icon name="trash" :size="18" /></button>
+          <button v-if="f.segments.length > 1" class="btn small ghost" aria-label="Abschnitt entfernen" @click="f.segments.splice(i, 1)"><Icon name="trash" :size="18" /></button>
         </div>
         <template v-if="s.after || s.note || s.by || s.open">
           <input v-model="s.note" style="margin-top: 6px" placeholder="Wofür? z. B. Anruf Chef, Mail an Kunden geschrieben" />

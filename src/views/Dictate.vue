@@ -295,14 +295,14 @@ const setNow = () => { d.value.eventAt = localNow(); d.value.eventAtAuto = false
       <h3>Vorgang</h3>
       <div class="row">
         <select v-model="d.caseId" class="grow"><option value="">– keiner –</option><option v-for="c in cases" :key="c.id" :value="c.id">{{ c.title }}</option></select>
-        <button class="btn small" type="button" @click="newCase.open = true"><Icon name="plus" :size="18" /></button>
+        <button class="btn small" type="button" aria-label="Neuen Vorgang anlegen" @click="newCase.open = true"><Icon name="plus" :size="18" /></button>
       </div>
       <small class="muted">Zusammengehörige Einträge (z. B. „Überstunden 2026“) lassen sich gemeinsam exportieren.</small>
     </div>
 
     <div v-if="problems.length" class="alert warn"><div v-for="p in problems" :key="p">• {{ p }}</div></div>
     <div class="row">
-      <button class="btn danger" type="button" @click="askDelete = true"><Icon name="trash" :size="18" /></button>
+      <button class="btn danger" type="button" aria-label="Entwurf löschen" @click="askDelete = true"><Icon name="trash" :size="18" /></button>
       <button class="btn primary grow" type="button" :disabled="problems.length > 0 || busy" @click="confirm = true"><Icon name="lock" :size="18" /> Festschreiben</button>
     </div>
     <p class="muted" style="font-size: .85rem">Der Entwurf wird automatisch gespeichert (auch ohne Netz). Erst „Festschreiben“ trägt ihn unveränderbar in die Beweiskette ein.</p>

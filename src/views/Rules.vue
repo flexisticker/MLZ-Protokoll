@@ -102,7 +102,7 @@ const fileName = (id) => store.data?.files?.[id]?.name || 'Anlage';
           </div>
           <div class="row" style="margin-top: 6px">
             <button class="btn small" @click="open(r)">Ändern</button>
-            <button class="btn small ghost" @click="end = { id: r.id, date: today(), reason: '' }">Aufgehoben</button>
+            <button class="btn small ghost" @click="end = { id: r.id, date: today(), reason: '' }">Aufheben …</button>
           </div>
         </li>
       </ul>

@@ -76,9 +76,9 @@ async function doCancel() {
     <SubNav :items="NAV.time()" />
     <div class="card">
       <div class="row between">
-        <button class="btn small ghost" @click="year--"><Icon name="left" /></button>
+        <button class="btn small ghost" aria-label="Vorjahr" @click="year--"><Icon name="left" /></button>
         <h2 style="margin: 0">Urlaub {{ year }}</h2>
-        <button class="btn small ghost" @click="year++"><Icon name="right" /></button>
+        <button class="btn small ghost" aria-label="Folgejahr" @click="year++"><Icon name="right" /></button>
       </div>
       <div v-if="acc" class="kpis" style="margin-top: 10px">
         <div class="kpi"><b>{{ num(acc.total) }}</b><span>Anspruch gesamt</span></div>
