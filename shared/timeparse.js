@@ -140,6 +140,10 @@ export function parseWorkTime(text, today = ymd(new Date())) {
     const d = durationMinutes(before) ?? durationMinutes(around);
     if (d != null && d < 300) { breakMinutes = (breakMinutes || 0) + d; break; }
   }
+  if (breakMinutes == null) { // „Pause in Minuten 45“, „Pause: 30“
+    const pm = s.match(/\b(?:pause|mittagspause)\b(?: in minuten| minuten| min)?:? (\d{1,3})\b(?!:| uhr)/);
+    if (pm && Number(pm[1]) < 300) breakMinutes = Number(pm[1]);
+  }
   if (/\b(keine|ohne) pause\b/.test(s)) breakMinutes = 0;
   if (breakMinutes == null && breaks.length) breakMinutes = breaks.reduce((n, b) => n + (toMinStr(b.end) - toMinStr(b.start)), 0);
 
@@ -190,4 +194,18 @@ export function initiator(text) {
   if (!m) return '';
   const v = m[1].replace(/\s*,\s*/, ' ').trim();
   return v.charAt(0).toUpperCase() + v.slice(1);
+}
+
+/**
+ * Ist der Satz eine Arbeitszeit-Angabe? strong = ausdrücklich („erfasse folgende Arbeitszeit …“, „Arbeitszeit heute …“),
+ * weak = Zeiten mit Arbeitszeit-Wörtern. Ergebnis enthält die erkannten Zeiten.
+ */
+export function workTimeIntent(text, today) {
+  const s = normalize(text);
+  const p = parseWorkTime(text, today);
+  if (!p.start && !p.end) return { level: '', time: p };
+  const explicit = /\b(erfass\w*|eintrag\w*|trag\w*|notier\w*|buch\w*|speicher\w*)\b/.test(s) && /\barbeitszeit\w*\b/.test(s);
+  const leading = /^\s*(meine |die |heutige |heute )?arbeitszeit/.test(s) || /^\s*(heute |gestern )?(arbeitsbeginn|beginn|angefangen)\b/.test(s);
+  const words = /\b(arbeitszeit|arbeitsbeginn|arbeitsende|angefangen|begonnen|beginn|feierabend|aufgehoert|gestempelt|eingestempelt|ausgestempelt|pause)\b/.test(s);
+  return { level: explicit || leading ? 'strong' : words ? 'weak' : '', time: p };
 }

@@ -59,7 +59,7 @@ Eigenständiges Projekt (nicht Teil von Flex-Studio). **Keine Passwörter, Token
   192.168.3.0/24 in der Access List. Details `docs/INSTALLATION-UNRAID.md` Abschnitt 5.
 
 ## Testen
-- `npm test` (28 Tests), `node test/mock-services.mjs` (Zeitstempeldienst :8098 mit eigener CA in `test/.tsa/`, Ollama-Attrappe :8097,
+- `npm test` (29 Tests), `node test/mock-services.mjs` (Zeitstempeldienst :8098 mit eigener CA in `test/.tsa/`, Ollama-Attrappe :8097,
   Claude-Attrappe :8096 mit `CLAUDE_BASE_URL=http://127.0.0.1:8096`, Schlüssel `sk-ant-test`), Spracherkennung per
   `WHISPER_BIN=$PWD/test/fake-whisper.sh` (Text über `FAKE_WHISPER_TEXT_FILE`; braucht eine – auch leere – Modelldatei `ggml-small.bin` in `MODEL_DIR` oder `DATA_DIR/whisper`),
   Server mit `TSA_URLS=http://127.0.0.1:8098/tsr TSA_CA_FILE=$PWD/test/.tsa/ca.crt WHISPER_PRELOAD=off`.
@@ -163,6 +163,11 @@ Eigenständiges Projekt (nicht Teil von Flex-Studio). **Keine Passwörter, Token
   **Mikrofon nicht mehr in der Menüleiste** (`tab-bars.md`: „Use a tab bar to support navigation, not to provide actions“) → schwebender Knopf `.fab`
   rechts über der Menüleiste (auf `/diktat` ausgeblendet), Menü = 4 Reiter. Nicht nur Farbe: Wochenbalken „!“ bei Verstoß, Kalender-Buchstaben (U/K/S/G/F/A),
   aria-labels für alle Symbol-Knöpfe, „Aufheben …“ statt „Aufgehoben“. Geprüft: hell/dunkel, alle Seiten bei 150 % Schrift ohne Überlauf.
+- **1.11.1 (29.10.2026):** Kunde: „Erfasse folgende Arbeitszeit: Beginn …, Ende …, Pause in Minuten …“ über den Sprechen-Knopf landete als Auffälligkeit.
+  `workTimeIntent(text, today)` (shared/timeparse.js): strong = „erfasse/trag ein … Arbeitszeit“ oder Satz beginnt mit Arbeitszeit/Beginn, weak = Zeiten +
+  Arbeitszeit-Wörter, sonst ''. Entwurf (`Dictate.vue`): strong → sofort ins Tagesformular (`?vorschlag`, `entwurf` wird beim Speichern gelöscht), weak →
+  Hinweis „Das klingt nach Arbeitszeit“. Erkannter Text wird sofort genutzt (`heard`, nicht erst nach Abgleich). Server `runFor`: strong überstimmt die KI → kind time;
+  Prompt mit zweitem Beispiel. Parser: „Pause in Minuten 45“ / „Pause: 30“.
 
 ## Offene Punkte / Ideen
 - Nach der Installation: Erkennungsdauer auf dem Xeon messen; bei guter Zeit Diktat-Modell auf `large-v3-turbo-q5_0` stellen.

@@ -1,5 +1,6 @@
 <script setup>
 import { parseSick } from '../../shared/sickparse.js';
+import { workTimeIntent } from '../../shared/timeparse.js';
 // Entwurf eines Logbuch-Eintrags: diktieren, Fotos, Leitfragen – dann festschreiben.
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
@@ -84,12 +85,27 @@ function useSuggestion() {
   if (sg.kind === 'brtime') router.push({ path: '/betriebsrat', query: { ...q, vorschlag: toB64(sg.brtime) } });
 }
 // Krankmeldung erkannt (feste Regeln – auch ohne KI oder wenn die KI es als Vorfall einordnet)
-const spokenAll = computed(() => (d.value?.fileIds || []).map((f) => store.data?.transcripts?.[f]?.text).filter(Boolean).join('. '));
+const heard = reactive({}); // erkannte Texte sofort (nicht erst nach dem nächsten Abgleich)
+const spokenAll = computed(() => (d.value?.fileIds || []).map((f) => heard[f] || store.data?.transcripts?.[f]?.text).filter(Boolean).join('. '));
 const sick = computed(() => {
   if (!spokenAll.value || suggestionKind.value === 'absence' || d.value?.sickDismissed) return null;
   const p = parseSick(spokenAll.value, localNow().slice(0, 10));
   return p.sick ? p : null;
 });
+// Arbeitszeit diktiert („Erfasse folgende Arbeitszeit: Beginn …, Ende …, Pause …“) → ins Arbeitszeit-Formular
+const workTime = computed(() => {
+  if (!spokenAll.value || sick.value || d.value?.timeDismissed) return null;
+  const w = workTimeIntent(spokenAll.value, localNow().slice(0, 10));
+  if (suggestionKind.value === 'time' && w.level !== 'strong') return null; // dann zeigt der KI-Hinweis den Weg
+  return w.level ? w : null;
+});
+function useWorkTime() {
+  const t = workTime.value.time;
+  const fileId = d.value.fileIds.find((f) => d.value.files[f]?.purpose === 'audio') || '';
+  router.push({ path: `/zeit/tag/${t.date}`, query: { entwurf: d.value.id, vorschlag: toB64({ start: t.start, end: t.end, breakMinutes: t.breakMinutes, orderedBy: t.orderedBy, spoken: spokenAll.value, fileId }) } });
+}
+// ausdrücklich gesagt → gleich weiter (wartet, falls die KI noch arbeitet, nicht ab)
+watch(workTime, (w) => { if (w?.level === 'strong' && !d.value.autoRouted) { d.value.autoRouted = true; toast('Arbeitszeit erkannt – bitte prüfen und speichern'); useWorkTime(); } });
 function useSick() {
   router.push({ path: '/abwesenheit', query: { entwurf: d.value.id, vorschlag: toB64({ type: 'krank', ...sick.value, note: spokenAll.value.slice(0, 900) }) } });
 }
@@ -134,6 +150,7 @@ async function pick(e, purpose) {
   saveDraft(d.value);
 }
 function onTranscript(fid, text, force = false) {
+  if (text) heard[fid] = text;
   if (!d.value || d.value.applied.includes(fid) || !text || text === '(keine Sprache erkannt)') return;
   if (!force && d.value.assistWanted && st.value !== 'off') return; // die KI füllt die Felder aus
   d.value.applied.push(fid);
@@ -218,6 +235,11 @@ const setNow = () => { d.value.eventAt = localNow(); d.value.eventAtAuto = false
       <small class="muted">{{ d.source.kind === 'time-note' ? 'Bemerkung zur Arbeitszeit' : 'Notiz aus der früheren Zeiterfassung (ibuchron)' }} vom {{ d.source.date.split('-').reverse().join('.') }}<template v-if="d.source.start">, Arbeitszeit {{ d.source.start }}–{{ d.source.end }}</template>:</small><br />
       „{{ d.source.text }}“
       <div v-if="!String(d.facts || '').includes(d.source.text)" style="margin-top: 6px"><button class="btn small" @click="d.facts = [d.facts, d.source.text].filter(Boolean).join('\n')">In „Was ist passiert“ übernehmen</button></div>
+    </div>
+
+    <div v-if="workTime" class="alert warn">
+      Das klingt nach <b>Arbeitszeit</b>: {{ workTime.time.start || '?' }}–{{ workTime.time.end || '?' }}<template v-if="workTime.time.breakMinutes != null">, Pause {{ workTime.time.breakMinutes }} Min.</template>.
+      <div class="row wrap" style="margin-top: 6px"><button class="btn small primary" @click="useWorkTime">Als Arbeitszeit erfassen</button><button class="btn small" @click="d.timeDismissed = true">Nein, Logbuch-Eintrag</button></div>
     </div>
 
     <div v-if="sick" class="alert warn">

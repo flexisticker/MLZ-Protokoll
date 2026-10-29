@@ -96,3 +96,13 @@ test('Wer hat die Nacharbeit veranlasst?', async () => {
   assert.equal(initiator('Frau Schulz rief um 18 Uhr an'), 'Frau Schulz');
   assert.equal(initiator('ich habe noch Mails geschrieben'), '');
 });
+
+test('Diktierte Arbeitszeit wird als Arbeitszeit erkannt', async () => {
+  const { workTimeIntent } = await import('../shared/timeparse.js');
+  let w = workTimeIntent('Erfasse folgende Arbeitszeit: Beginn 7:30, Ende 16:30, Pause 45 Minuten', '2026-10-29');
+  assert.deepEqual([w.level, w.time.start, w.time.end, w.time.breakMinutes], ['strong', '07:30', '16:30', 45]);
+  w = workTimeIntent('erfasse folgende Arbeitszeit. Beginn 7 Uhr 30. Ende 16 Uhr 30. Pause in Minuten 45.', '2026-10-29');
+  assert.equal(w.time.breakMinutes, 45);
+  assert.equal(workTimeIntent('Heute um 10 Uhr hat mich Maier in Halle 2 angeschrien, ich soll bis 19 Uhr bleiben', '2026-10-29').level, '');
+  assert.equal(workTimeIntent('Heute um halb acht angefangen und um 17 Uhr aufgehört', '2026-10-29').level, 'weak');
+});

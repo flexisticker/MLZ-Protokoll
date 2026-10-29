@@ -8,7 +8,7 @@ import { append, getRow, parsePayload } from './evidence.js';
 import { transcriptOf } from './transcribe.js';
 import { CATEGORIES } from '../shared/categories.js';
 import { ENTRY_FIELDS, NOTE_SCHEMA, SCHEMA, combineSpoken, extractWhen, normalize, notesPrompt, notesUserPrompt, systemPrompt, userPrompt } from '../shared/assist.js';
-import { parseWorkTime } from '../shared/timeparse.js';
+import { parseWorkTime, workTimeIntent } from '../shared/timeparse.js';
 import { parseSick } from '../shared/sickparse.js';
 
 const CLAUDE_MODEL = 'claude-opus-5-5';
@@ -210,6 +210,11 @@ async function runFor(id) {
   }
   // Arbeitszeit: feste Regeln für Uhrzeiten sind zuverlässiger als die KI
   // Mehrere Aufnahmen der Reihe nach auswerten: eine spätere Angabe (Korrektur) ersetzt die frühere.
+  // Ausdrücklich diktierte Arbeitszeit („Erfasse folgende Arbeitszeit …“) ist Arbeitszeit, auch wenn die KI etwas anderes meint
+  if (n.kind !== 'time' && !d.source?.text) {
+    const all = texts.filter(Boolean).join('. ');
+    if (workTimeIntent(all, now.slice(0, 10)).level === 'strong' && !parseSick(all, now.slice(0, 10)).sick) n.kind = 'time';
+  }
   // Krankmeldung: feste Regeln ergänzen, was die KI nicht erkannt hat
   if (n.kind === 'absence') {
     const p = parseSick(texts.filter(Boolean).join('. '), now.slice(0, 10));
